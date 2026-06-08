@@ -8,6 +8,8 @@ import Header from '@/components/Header';
 import PropertyCard from '@/components/PropertyCard';
 import PropertyDetailsClient from '@/components/PropertyDetailsClient';
 
+export const revalidate = 3600;
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
