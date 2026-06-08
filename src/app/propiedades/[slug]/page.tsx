@@ -19,12 +19,6 @@ export async function generateStaticParams() {
   } catch {
     return [];
   }
-} = await import('@/services/db');
-    const properties = await db.getProperties({ onlyPublished: true });
-    return properties.map((p) => ({ slug: p.slug }));
-  } catch {
-    return [];
-  }
 }
 
 interface PageProps {
@@ -152,13 +146,13 @@ export default async function PropertyPage({ params }: PageProps) {
         <section className="mb-8 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           {images.length === 0 ? (
             <div className="relative aspect-video w-full bg-muted flex items-center justify-center text-muted-foreground">
-              Sin imágenes cargadas.
+              Sin im&aacute;genes cargadas.
             </div>
           ) : images.length === 1 || secondaryImgs.length === 0 ? (
             <div className="relative aspect-[21/9] w-full bg-muted">
               <Image
                 src={primaryImg.image_url}
-                alt={property.name}
+                alt={`${property.name}`}
                 fill
                 priority
                 className="object-cover"
@@ -213,14 +207,14 @@ export default async function PropertyPage({ params }: PageProps) {
             </span>
           </div>
           <div className="flex flex-col p-2.5 border-l border-border/50">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Tipología</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Tipolog&iacute;a</span>
             <span className="text-sm font-bold text-foreground mt-1.5 flex items-center gap-1.5">
               <Building2 className="h-4 w-4 text-secondary" />
               {property.tipologia}
             </span>
           </div>
           <div className="flex flex-col p-2.5 border-l border-border/50">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Distribución</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Distribuci&oacute;n</span>
             <span className="text-sm font-bold text-foreground mt-1.5 flex items-center gap-1.5">
               <Bed className="h-4 w-4 text-secondary" />
               {property.dormitorios} {property.dormitorios === 1 ? 'Dormitorio' : 'Dormitorios'}
@@ -254,7 +248,7 @@ export default async function PropertyPage({ params }: PageProps) {
       {/* Footer */}
       <footer className="border-t border-border bg-card py-6 mt-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} PropiApp.cl. Todos los derechos reservados.</p>
+          <p>&copy; {new Date().getFullYear()} PropiApp.cl. Todos los derechos reservados.</p>
           <div className="flex gap-6 font-medium">
             <Link href="/" className="hover:text-primary transition-colors">Volver al Inicio</Link>
             <span className="text-border">|</span>
