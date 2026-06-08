@@ -8,7 +8,6 @@ import Header from '@/components/Header';
 import PropertyCard from '@/components/PropertyCard';
 import PropertyDetailsClient from '@/components/PropertyDetailsClient';
 
-export const dynamic = 'force-static';
 export const revalidate = 86400;
 export const dynamicParams = true;
 
