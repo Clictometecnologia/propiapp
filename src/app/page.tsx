@@ -2,8 +2,7 @@ import { db } from '@/services/db';
 import Header from '@/components/Header';
 import Marketplace from '@/components/Marketplace';
 
-export const dynamic = 'force-static';
-export const revalidate = 3600; // Revalidate every minute
+export const revalidate = 60; // Revalidate every minute
 
 export default async function Home() {
   // Fetch properties on the server side
