@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Search, 
@@ -80,6 +80,14 @@ export default function AdminLeadsList({ initialLeads, properties }: AdminLeadsL
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState<LeadFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
+
+  // Auto-refresh leads data every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [router]);
 
   const openCreateModal = () => {
     setEditingLead(null);
