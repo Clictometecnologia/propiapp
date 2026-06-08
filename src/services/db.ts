@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { Property, PropertyImage, Lead } from '../types';
 import { createServerSupabase } from '../lib/supabase-server';
+import { createAdminSupabase } from '@/lib/supabase-admin';
 
 function capitalizeEstado(s: string): Lead['estado'] {
   return (s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()) as Lead['estado'];
@@ -21,6 +22,19 @@ async function getClient() {
   } catch {}
   return supabase;
 }
+
+async function getAdminClient() {
+  try {
+    const sb = await createAdminSupabase();
+    if (sb) return sb;
+  } catch {}
+  try {
+    const sb = await createServerSupabase();
+    if (sb) return sb;
+  } catch {}
+  return supabase;
+}
+
 
 export const db = {
   // --------------------------------------------------
@@ -140,8 +154,7 @@ export const db = {
     propertyData: Omit<Property, 'id' | 'created_at' | 'updated_at' | 'images'>,
     imagesData: Omit<PropertyImage, 'id' | 'property_id'>[]
   ): Promise<Property> {
-    const sb = await getClient();
-    if (!sb) throw new Error('Supabase no está configurado');
+    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
 
     const slug = propertyData.slug || propertyData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
@@ -177,8 +190,7 @@ export const db = {
     propertyData: Partial<Omit<Property, 'id' | 'created_at' | 'updated_at' | 'images'>>,
     imagesData?: Omit<PropertyImage, 'id' | 'property_id'>[]
   ): Promise<Property> {
-    const sb = await getClient();
-    if (!sb) throw new Error('Supabase no está configurado');
+    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
 
     const nowStr = new Date().toISOString();
 
@@ -215,8 +227,7 @@ export const db = {
   },
 
   async deleteProperty(id: string): Promise<boolean> {
-    const sb = await getClient();
-    if (!sb) throw new Error('Supabase no está configurado');
+    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
 
     const { error } = await sb
       .from('properties')
@@ -296,12 +307,11 @@ export const db = {
   },
 
   async createLead(leadData: Omit<Lead, 'id' | 'created_at'>): Promise<Lead> {
-    const sb = await getClient();
-    if (!sb) throw new Error('Supabase no está configurado');
+    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
 
     const { data, error } = await sb
       .from('leads')
-      .insert([{ ...leadData, estado: leadData.estado.toLowerCase() }])
+      .insert([{ ...leadData, estado: leadData.estado }])
       .select()
       .single();
 
@@ -310,12 +320,11 @@ export const db = {
   },
 
   async updateLeadStatus(id: string, estado: Lead['estado']): Promise<Lead> {
-    const sb = await getClient();
-    if (!sb) throw new Error('Supabase no está configurado');
+    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
 
     const { data, error } = await sb
       .from('leads')
-      .update({ estado: estado.toLowerCase() })
+      .update({ estado })
       .eq('id', id)
       .select()
       .single();
@@ -325,8 +334,7 @@ export const db = {
   },
 
   async updateLeadObservation(id: string, observacion: string): Promise<Lead> {
-    const sb = await getClient();
-    if (!sb) throw new Error('Supabase no está configurado');
+    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
 
     const { data, error } = await sb
       .from('leads')
@@ -340,11 +348,10 @@ export const db = {
   },
 
   async updateLead(id: string, data: Partial<Omit<Lead, 'id' | 'created_at' | 'property_name'>>): Promise<Lead> {
-    const sb = await getClient();
-    if (!sb) throw new Error('Supabase no está configurado');
+    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
 
     const payload = { ...data } as any;
-    if (payload.estado) payload.estado = payload.estado.toLowerCase();
+    // estado already in correct format (no lowercase conversion needed)
 
     const { data: updated, error } = await sb
       .from('leads')
@@ -358,8 +365,7 @@ export const db = {
   },
 
   async deleteLead(id: string): Promise<boolean> {
-    const sb = await getClient();
-    if (!sb) throw new Error('Supabase no está configurado');
+    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
 
     const { error } = await sb
       .from('leads')
