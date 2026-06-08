@@ -81,13 +81,19 @@ export default function AdminLeadsList({ initialLeads, properties }: AdminLeadsL
   const [formData, setFormData] = useState<LeadFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  // Auto-refresh leads data every 30 seconds
+  // Refrescar leads silenciosamente cada 30s (sin recargar la pagina)
   useEffect(() => {
-    const interval = setInterval(() => {
-      router.refresh();
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/leads');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.leads) setLeads(data.leads);
+        }
+      } catch {}
     }, 30000);
     return () => clearInterval(interval);
-  }, [router]);
+  }, []);
 
   const openCreateModal = () => {
     setEditingLead(null);
