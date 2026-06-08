@@ -8,7 +8,24 @@ import Header from '@/components/Header';
 import PropertyCard from '@/components/PropertyCard';
 import PropertyDetailsClient from '@/components/PropertyDetailsClient';
 
-export const revalidate = 3600;
+export const dynamic = 'force-static';
+export const revalidate = 86400;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  try {
+    const properties = await db.getProperties({ onlyPublished: true });
+    return properties.map((p) => ({ slug: p.slug }));
+  } catch {
+    return [];
+  }
+} = await import('@/services/db');
+    const properties = await db.getProperties({ onlyPublished: true });
+    return properties.map((p) => ({ slug: p.slug }));
+  } catch {
+    return [];
+  }
+}
 
 interface PageProps {
   params: Promise<{ slug: string }>;
