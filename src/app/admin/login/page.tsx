@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Building2, Key, Mail, Loader2, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -24,18 +23,16 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      if (!supabase) {
-        setError('El sistema de autenticación no está configurado. Contacta al administrador.');
-        setLoading(false);
-        return;
-      }
-
-      const { error: authErr } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
-      if (authErr) {
-        setError(authErr.message);
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Error al iniciar sesión');
         setLoading(false);
         return;
       }
@@ -43,7 +40,7 @@ export default function AdminLogin() {
       router.push('/admin/dashboard');
     } catch (err) {
       console.error(err);
-      setError('Ocurrió un error inesperado.');
+      setError('Error de conexión. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }

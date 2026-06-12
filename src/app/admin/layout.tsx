@@ -15,7 +15,6 @@ import {
   Menu,
   X
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -37,14 +36,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     async function checkAuth() {
-      if (supabase) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          router.push('/admin/login');
-        } else {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
           setAuthorized(true);
+        } else {
+          router.push('/admin/login');
         }
-      } else {
+      } catch {
         router.push('/admin/login');
       }
       setCheckingAuth(false);
@@ -53,9 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [router, pathname]);
 
   const handleLogout = async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
+    await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/admin/login');
   };
 
