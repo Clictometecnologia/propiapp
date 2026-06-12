@@ -549,7 +549,7 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
           <div className="flex flex-col gap-5">
             <div>
               <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Paso 4: Ubicación en el Mapa</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Arrastra el marcador para ubicar el proyecto en el mapa.</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Busca una dirección o arrastra el marcador para ubicar el proyecto.</p>
             </div>
 
             <div className="bg-card border border-border p-4 rounded-xl flex flex-col gap-3">
