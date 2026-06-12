@@ -27,12 +27,23 @@ export async function verifyToken(token: string): Promise<AuthPayload | null> {
   }
 }
 
-export function getAdminCredentials() {
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-  if (!email || !password) {
-    console.warn('ADMIN_EMAIL or ADMIN_PASSWORD not set');
-    return null;
+export interface AdminUser {
+  email: string;
+  password: string;
+}
+
+export function getAdminUsers(): AdminUser[] {
+  const raw = process.env.ADMIN_CREDENTIALS;
+  if (!raw) {
+    console.warn('ADMIN_CREDENTIALS not set');
+    return [];
   }
-  return { email, password };
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(u => u.email && u.password);
+  } catch {
+    console.error('ADMIN_CREDENTIALS is not valid JSON');
+    return [];
+  }
 }

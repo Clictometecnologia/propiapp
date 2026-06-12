@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { signToken, getAdminCredentials } from '@/lib/auth';
+import { signToken, getAdminUsers } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
@@ -10,20 +10,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });
     }
 
-    const creds = getAdminCredentials();
-    if (!creds) {
-      console.error('ADMIN_EMAIL or ADMIN_PASSWORD not set on server');
+    const users = getAdminUsers();
+    if (users.length === 0) {
+      console.error('ADMIN_CREDENTIALS not set or empty on server');
       return NextResponse.json({ error: 'Auth no configurado' }, { status: 500 });
     }
 
-    const emailMatch = email.toLowerCase().trim() === creds.email.toLowerCase().trim();
-    const passwordMatch = password === creds.password;
+    const user = users.find(u =>
+      u.email.toLowerCase().trim() === email.toLowerCase().trim() &&
+      u.password === password
+    );
 
-    if (!emailMatch || !passwordMatch) {
+    if (!user) {
       return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
     }
 
-    const token = await signToken({ email: creds.email, role: 'admin' });
+    const token = await signToken({ email: user.email, role: 'admin' });
 
     const response = NextResponse.json({ success: true });
     response.cookies.set('auth_token', token, {
