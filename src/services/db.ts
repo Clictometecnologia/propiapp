@@ -79,7 +79,7 @@ export const db = {
           await new Promise(r => setTimeout(r, 2000));
           const retryQuery = sb
             .from('properties')
-            .select('*')
+            .select(filters?.includeImages !== false ? '*, images:property_images(*)' : '*')
             .limit(50);
           if (filters?.onlyPublished) retryQuery.eq('published', true);
           if (filters?.comuna && filters.comuna !== 'all') retryQuery.eq('comuna', filters.comuna);
@@ -106,7 +106,7 @@ export const db = {
         try {
           const retryQuery = sb
             .from('properties')
-            .select('*')
+            .select(filters?.includeImages !== false ? '*, images:property_images(*)' : '*')
             .limit(50);
           if (filters?.onlyPublished) retryQuery.eq('published', true);
           if (filters?.comuna && filters.comuna !== 'all') retryQuery.eq('comuna', filters.comuna);

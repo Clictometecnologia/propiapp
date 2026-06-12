@@ -211,7 +211,7 @@ export default function Marketplace({ initialProperties }: MarketplaceProps) {
             </div>
 
             {/* Filter controls Grid - hidden on mobile unless toggled */}
-            <div className={`${mobileFiltersOpen ? 'flex' : 'hidden'} md:grid md:grid-cols-4 lg:grid-cols-7 flex-col gap-3 items-end`}>
+            <div className={`${mobileFiltersOpen ? 'grid grid-cols-1' : 'hidden'} md:grid md:grid-cols-4 lg:grid-cols-7 gap-3 items-end`}>
               {/* Comuna */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Comuna</label>
