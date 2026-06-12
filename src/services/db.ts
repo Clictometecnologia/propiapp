@@ -99,8 +99,8 @@ export const db = {
         params.push(filters.precioMax);
       }
       if (filters?.entregaInmediata !== undefined) {
-        conditions.push(`p.entrega_inmediata = $${paramIdx++}`);
-        params.push(filters.entregaInmediata);
+        conditions.push(`p.entrega_inmediata = $${paramIdx++}::boolean`);
+        params.push(!!filters.entregaInmediata);
       }
       if (filters?.bonoPie !== undefined) {
         conditions.push(`p.bono_pie > 0`);
@@ -194,19 +194,42 @@ export const db = {
   ): Promise<Property> {
     const slug = propertyData.slug || propertyData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
+    const numericFields = {
+      precio_desde_uf: propertyData.precio_desde_uf ?? 0,
+      dormitorios: propertyData.dormitorios ?? 0,
+      banos: propertyData.banos ?? 0,
+      bono_pie: propertyData.bono_pie ?? 0,
+    };
+
     const result = await query(`
       INSERT INTO properties (name, slug, comuna, tipologia, precio_desde_uf, dormitorios, banos, bono_pie,
         entrega_inmediata, descripcion, amenidades, ejecutivo_nombre, ejecutivo_cargo, ejecutivo_whatsapp,
         ejecutivo_email, brochure_url, lat, lng, featured, published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      VALUES ($1::text, $2::text, $3::text, $4::text, $5::numeric, $6::int, $7::int, $8::numeric, $9::boolean,
+        $10::text, $11::text[], $12::text, $13::text, $14::text, $15::text, $16::text, $17::double precision,
+        $18::double precision, $19::boolean, $20::boolean)
       RETURNING id
     `, [
-      propertyData.name, slug, propertyData.comuna, propertyData.tipologia, propertyData.precio_desde_uf,
-      propertyData.dormitorios, propertyData.banos, propertyData.bono_pie || 0, propertyData.entrega_inmediata,
-      propertyData.descripcion, propertyData.amenidades, propertyData.ejecutivo_nombre,
-      propertyData.ejecutivo_cargo, propertyData.ejecutivo_whatsapp, propertyData.ejecutivo_email,
-      propertyData.brochure_url || '', propertyData.lat ?? null, propertyData.lng ?? null,
-      propertyData.featured || false, propertyData.published || false,
+      propertyData.name || '',
+      slug,
+      propertyData.comuna || '',
+      propertyData.tipologia || '',
+      numericFields.precio_desde_uf,
+      numericFields.dormitorios,
+      numericFields.banos,
+      numericFields.bono_pie,
+      !!propertyData.entrega_inmediata,
+      propertyData.descripcion || '',
+      Array.isArray(propertyData.amenidades) ? propertyData.amenidades : [],
+      propertyData.ejecutivo_nombre || '',
+      propertyData.ejecutivo_cargo || '',
+      propertyData.ejecutivo_whatsapp || '',
+      propertyData.ejecutivo_email || '',
+      propertyData.brochure_url || '',
+      propertyData.lat ?? null,
+      propertyData.lng ?? null,
+      !!propertyData.featured,
+      !!propertyData.published,
     ]);
 
     const propId = result.rows[0].id;
@@ -214,12 +237,12 @@ export const db = {
     if (imagesData && imagesData.length > 0) {
       const imgValues = imagesData.map((img, i) => {
         const offset = i * 4;
-        return `($1, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+        return `($1::uuid, $${offset + 2}::text, $${offset + 3}::boolean, $${offset + 4}::int)`;
       }).join(', ');
 
       const imgParams: any[] = [propId];
       for (const img of imagesData) {
-        imgParams.push(img.image_url, img.is_primary, img.sort_order);
+        imgParams.push(img.image_url || '', !!img.is_primary, img.sort_order ?? 0);
       }
 
       await query(`
@@ -240,21 +263,44 @@ export const db = {
     const params: any[] = [];
     let idx = 1;
 
+    const typeMap: Record<string, string> = {
+      name: 'text',
+      slug: 'text',
+      comuna: 'text',
+      tipologia: 'text',
+      precio_desde_uf: 'numeric',
+      dormitorios: 'int',
+      banos: 'int',
+      bono_pie: 'numeric',
+      entrega_inmediata: 'boolean',
+      descripcion: 'text',
+      amenidades: 'text[]',
+      ejecutivo_nombre: 'text',
+      ejecutivo_cargo: 'text',
+      ejecutivo_whatsapp: 'text',
+      ejecutivo_email: 'text',
+      brochure_url: 'text',
+      lat: 'double precision',
+      lng: 'double precision',
+      featured: 'boolean',
+      published: 'boolean',
+    };
+
     for (const [key, value] of Object.entries(propertyData)) {
-      const col = key === 'precio_desde_uf' ? key
-        : key === 'entrega_inmediata' ? key
-        : key === 'bono_pie' ? key
-        : key === 'ejecutivo_nombre' ? 'ejecutivo_nombre'
-        : key === 'ejecutivo_cargo' ? 'ejecutivo_cargo'
-        : key === 'ejecutivo_whatsapp' ? 'ejecutivo_whatsapp'
-        : key === 'ejecutivo_email' ? 'ejecutivo_email'
-        : key === 'brochure_url' ? 'brochure_url'
-        : key === 'lat' ? 'lat'
-        : key === 'lng' ? 'lng'
-        : key;
       const dbCol = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-      sets.push(`${dbCol} = $${idx++}`);
-      params.push(value ?? null);
+      const cast = typeMap[key] || 'text';
+      let safeValue = value ?? null;
+      if (cast === 'numeric' || cast === 'int') {
+        safeValue = value ?? 0;
+      } else if (cast === 'boolean') {
+        safeValue = !!value;
+      } else if (cast === 'text[]') {
+        safeValue = Array.isArray(value) ? value : [];
+      } else if (cast === 'text') {
+        safeValue = value ?? '';
+      }
+      sets.push(`${dbCol} = $${idx++}::${cast}`);
+      params.push(safeValue);
     }
 
     sets.push(`updated_at = now()`);
@@ -271,12 +317,12 @@ export const db = {
       if (imagesData.length > 0) {
         const imgValues = imagesData.map((_, i) => {
           const offset = i * 4;
-          return `($1, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+          return `($1::uuid, $${offset + 2}::text, $${offset + 3}::boolean, $${offset + 4}::int)`;
         }).join(', ');
 
         const imgParams: any[] = [id];
         for (const img of imagesData) {
-          imgParams.push(img.image_url, img.is_primary, img.sort_order);
+          imgParams.push(img.image_url || '', !!img.is_primary, img.sort_order ?? 0);
         }
 
         await query(`
@@ -376,11 +422,11 @@ export const db = {
     const estado = leadData.estado.charAt(0).toUpperCase() + leadData.estado.slice(1).toLowerCase();
     const result = await query(`
       INSERT INTO leads (property_id, nombre, email, telefono, mensaje, estado, observacion)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text)
       RETURNING *
     `, [
-      leadData.property_id, leadData.nombre, leadData.email,
-      leadData.telefono, leadData.mensaje, estado, leadData.observacion || '',
+      leadData.property_id || null, leadData.nombre || '', leadData.email || '',
+      leadData.telefono || '', leadData.mensaje || '', estado, leadData.observacion || '',
     ]);
     return rowToLead(result.rows[0]);
   },
@@ -388,14 +434,14 @@ export const db = {
   async updateLeadStatus(id: string, estado: Lead['estado']): Promise<Lead> {
     const value = typeof estado === 'string' ? estado.charAt(0).toUpperCase() + estado.slice(1).toLowerCase() : estado;
     const result = await query(`
-      UPDATE leads SET estado = $1 WHERE id = $2 RETURNING *
+      UPDATE leads SET estado = $1::text WHERE id = $2::uuid RETURNING *
     `, [value, id]);
     return rowToLead(result.rows[0]);
   },
 
   async updateLeadObservation(id: string, observacion: string): Promise<Lead> {
     const result = await query(`
-      UPDATE leads SET observacion = $1 WHERE id = $2 RETURNING *
+      UPDATE leads SET observacion = $1::text WHERE id = $2::uuid RETURNING *
     `, [observacion, id]);
     return rowToLead(result.rows[0]);
   },
@@ -405,22 +451,22 @@ export const db = {
     const params: any[] = [];
     let idx = 1;
 
-    if (data.nombre !== undefined) { sets.push(`nombre = $${idx++}`); params.push(data.nombre); }
-    if (data.email !== undefined) { sets.push(`email = $${idx++}`); params.push(data.email); }
-    if (data.telefono !== undefined) { sets.push(`telefono = $${idx++}`); params.push(data.telefono); }
-    if (data.mensaje !== undefined) { sets.push(`mensaje = $${idx++}`); params.push(data.mensaje); }
+    if (data.nombre !== undefined) { sets.push(`nombre = $${idx++}::text`); params.push(data.nombre); }
+    if (data.email !== undefined) { sets.push(`email = $${idx++}::text`); params.push(data.email); }
+    if (data.telefono !== undefined) { sets.push(`telefono = $${idx++}::text`); params.push(data.telefono); }
+    if (data.mensaje !== undefined) { sets.push(`mensaje = $${idx++}::text`); params.push(data.mensaje); }
     if (data.estado !== undefined) {
-      sets.push(`estado = $${idx++}`);
+      sets.push(`estado = $${idx++}::text`);
       params.push(typeof data.estado === 'string' ? data.estado.charAt(0).toUpperCase() + data.estado.slice(1).toLowerCase() : data.estado);
     }
-    if (data.observacion !== undefined) { sets.push(`observacion = $${idx++}`); params.push(data.observacion); }
-    if (data.property_id !== undefined) { sets.push(`property_id = $${idx++}`); params.push(data.property_id); }
+    if (data.observacion !== undefined) { sets.push(`observacion = $${idx++}::text`); params.push(data.observacion); }
+    if (data.property_id !== undefined) { sets.push(`property_id = $${idx++}::uuid`); params.push(data.property_id); }
 
     if (sets.length === 0) throw new Error('No hay campos para actualizar');
     params.push(id);
 
     const result = await query(`
-      UPDATE leads SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *
+      UPDATE leads SET ${sets.join(', ')} WHERE id = $${idx}::uuid RETURNING *
     `, params);
     return rowToLead(result.rows[0]);
   },
@@ -435,7 +481,7 @@ export const db = {
   // --------------------------------------------------
   async trackPropertyView(propertyId: string): Promise<void> {
     try {
-      await query(`INSERT INTO property_views (property_id) VALUES ($1)`, [propertyId]);
+      await query(`INSERT INTO property_views (property_id) VALUES ($1::uuid)`, [propertyId]);
     } catch (err) {
       console.error('Error tracking view:', err);
     }
@@ -443,7 +489,7 @@ export const db = {
 
   async trackWhatsappClick(propertyId: string): Promise<void> {
     try {
-      await query(`INSERT INTO whatsapp_clicks (property_id) VALUES ($1)`, [propertyId]);
+      await query(`INSERT INTO whatsapp_clicks (property_id) VALUES ($1::uuid)`, [propertyId]);
     } catch (err) {
       console.error('Error tracking whatsapp click:', err);
     }
@@ -451,7 +497,7 @@ export const db = {
 
   async trackBrochureDownload(propertyId: string): Promise<void> {
     try {
-      await query(`INSERT INTO brochure_downloads (property_id) VALUES ($1)`, [propertyId]);
+      await query(`INSERT INTO brochure_downloads (property_id) VALUES ($1::uuid)`, [propertyId]);
     } catch (err) {
       console.error('Error tracking brochure download:', err);
     }
