@@ -5,18 +5,21 @@ export interface Property {
   name: string;
   slug: string;
   comuna: string;
-  tipologia: string; // E.g. 'Departamento', 'Casa'
+  tipologia: string;
   precio_desde_uf: number;
   dormitorios: number;
-  bono_pie: number; // percentage 0-100 (0 = no bonus)
+  banos: number;
+  bono_pie: number;
   entrega_inmediata: boolean;
   descripcion: string;
-  amenidades: string[]; // E.g. ['Piscina', 'Gimnasio']
+  amenidades: string[];
   ejecutivo_nombre: string;
   ejecutivo_cargo: string;
   ejecutivo_whatsapp: string;
   ejecutivo_email: string;
   brochure_url: string;
+  lat?: number;
+  lng?: number;
   featured: boolean;
   published: boolean;
   created_at: string;

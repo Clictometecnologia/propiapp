@@ -1,0 +1,9 @@
+=== Iniciando migración de imágenes a imgbb ===
+
+Total imágenes: 24
+Imágenes en Supabase Storage: 0
+
+
+=== Migración completada ===
+Migradas: 0
+Fallidas: 0

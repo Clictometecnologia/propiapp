@@ -157,7 +157,7 @@ export default function PropertyDetailsClient({ property }: PropertyDetailsClien
           </div>
         )}
 
-        <PropertyMap comuna={property.comuna} propertyName={property.name} />
+        <PropertyMap comuna={property.comuna} propertyName={property.name} lat={property.lat} lng={property.lng} />
       </div>
 
       {/* Right Column: Contact & Executive Sticky Widget */}

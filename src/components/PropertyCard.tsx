@@ -25,7 +25,7 @@ const PropertyCard = memo(function PropertyCard({ property }: PropertyCardProps)
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card hover-lift transition-all duration-300">
       {/* Property Image container */}
-      <div className="relative aspect-video w-full overflow-hidden bg-muted">
+      <Link href={`/propiedades/${property.slug}`} className="relative aspect-video w-full overflow-hidden bg-muted block">
         <Image
           src={primaryImage}
           alt={property.name}
@@ -58,7 +58,7 @@ const PropertyCard = memo(function PropertyCard({ property }: PropertyCardProps)
             {property.tipologia}
           </span>
         </div>
-      </div>
+      </Link>
 
       {/* Property Content */}
       <div className="flex flex-1 flex-col p-5">
@@ -78,7 +78,11 @@ const PropertyCard = memo(function PropertyCard({ property }: PropertyCardProps)
           <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground border-b border-border/50 pb-3">
             <div className="flex items-center gap-1">
               <Bed className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{property.dormitorios} {property.dormitorios === 1 ? 'Dormitorio' : 'Dormitorios'}</span>
+              <span>{property.dormitorios} {property.dormitorios === 1 ? 'Dorm' : 'Dorms'}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Bed className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>{property.banos} {property.banos === 1 ? 'Baño' : 'Baños'}</span>
             </div>
             <div className="flex items-center gap-1">
               <Home className="h-3.5 w-3.5 text-muted-foreground" />

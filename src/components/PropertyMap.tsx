@@ -7,9 +7,11 @@ import { COMUNA_COORDS } from '@/lib/comunas';
 interface PropertyMapProps {
   comuna: string;
   propertyName: string;
+  lat?: number;
+  lng?: number;
 }
 
-export default function PropertyMap({ comuna, propertyName }: PropertyMapProps) {
+export default function PropertyMap({ comuna, propertyName, lat: customLat, lng: customLng }: PropertyMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
 
@@ -20,7 +22,10 @@ export default function PropertyMap({ comuna, propertyName }: PropertyMapProps) 
     let isActive = true;
 
     const key = comuna.toLowerCase().trim();
-    const coords = COMUNA_COORDS[key] || { lat: -33.4489, lng: -70.6693 };
+    const defaultCoords = COMUNA_COORDS[key] || { lat: -33.4489, lng: -70.6693 };
+    const coords = customLat != null && customLng != null
+      ? { lat: customLat, lng: customLng }
+      : defaultCoords;
 
     (async () => {
       const L = await import('leaflet');

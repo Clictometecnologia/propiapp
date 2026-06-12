@@ -1,12 +1,12 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, MapPin, Bed, Building2, Percent, Calendar, Image as ImageIcon } from 'lucide-react';
+import { ChevronLeft, MapPin, Bed, Building2, Percent, Calendar } from 'lucide-react';
 import { db } from '@/services/db';
 import Header from '@/components/Header';
 import PropertyCard from '@/components/PropertyCard';
 import PropertyDetailsClient from '@/components/PropertyDetailsClient';
+import ImageGallery from '@/components/ImageGallery';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -69,8 +69,6 @@ export default async function PropertyPage({ params }: PageProps) {
 
   // Gallery calculations
   const images = property.images || [];
-  const primaryImg = images.find(img => img.is_primary) || images[0];
-  const secondaryImgs = images.filter(img => img.id !== primaryImg?.id);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -135,57 +133,13 @@ export default async function PropertyPage({ params }: PageProps) {
             <div className="relative aspect-video w-full bg-muted flex items-center justify-center text-muted-foreground">
               Sin imágenes cargadas.
             </div>
-          ) : images.length === 1 || secondaryImgs.length === 0 ? (
-            <div className="relative aspect-[21/9] w-full bg-muted">
-              <Image
-                src={primaryImg.image_url}
-                alt={property.name}
-                fill
-                priority
-                className="object-cover"
-                sizes="(max-w-7xl) 100vw"
-              />
-            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              {/* Primary large image (left/main) */}
-              <div className="relative aspect-video md:aspect-auto md:h-[420px] md:col-span-2 overflow-hidden bg-muted">
-                <Image
-                  src={primaryImg.image_url}
-                  alt={`${property.name} Principal`}
-                  fill
-                  priority
-                  className="object-cover hover:scale-101 transition-transform duration-300"
-                  sizes="(max-w-7xl) 66vw"
-                />
-              </div>
-              
-              {/* Secondary stacked images (right side) */}
-              <div className="grid grid-cols-2 md:grid-cols-1 gap-2 max-h-[420px] overflow-y-auto">
-                {secondaryImgs.map((img, i) => (
-                  <div key={img.id} className="relative aspect-video overflow-hidden bg-muted rounded-md">
-                    <Image
-                      src={img.image_url}
-                      alt={`${property.name} Galería ${i + 1}`}
-                      fill
-                      className="object-cover hover:scale-102 transition-transform duration-300"
-                      sizes="(max-w-7xl) 33vw"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {images.length > 3 && (
-            <div className="flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold text-muted-foreground border-t border-border bg-muted/30">
-              <ImageIcon className="h-3.5 w-3.5" />
-              {images.length} fotos en total
-            </div>
+            <ImageGallery images={images} projectName={property.name} />
           )}
         </section>
 
         {/* Specifications quick summary bar */}
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-card border border-border p-5 rounded-2xl mb-8">
+        <section className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-card border border-border p-5 rounded-2xl mb-8">
           <div className="flex flex-col p-2.5">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Comuna</span>
             <span className="text-sm font-bold text-foreground mt-1.5 flex items-center gap-1.5">
@@ -194,17 +148,17 @@ export default async function PropertyPage({ params }: PageProps) {
             </span>
           </div>
           <div className="flex flex-col p-2.5 border-l border-border/50">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Tipología</span>
-            <span className="text-sm font-bold text-foreground mt-1.5 flex items-center gap-1.5">
-              <Building2 className="h-4 w-4 text-secondary" />
-              {property.tipologia}
-            </span>
-          </div>
-          <div className="flex flex-col p-2.5 border-l border-border/50">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Distribución</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Dormitorios</span>
             <span className="text-sm font-bold text-foreground mt-1.5 flex items-center gap-1.5">
               <Bed className="h-4 w-4 text-secondary" />
               {property.dormitorios} {property.dormitorios === 1 ? 'Dormitorio' : 'Dormitorios'}
+            </span>
+          </div>
+          <div className="flex flex-col p-2.5 border-l border-border/50">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Baños</span>
+            <span className="text-sm font-bold text-foreground mt-1.5 flex items-center gap-1.5">
+              <Bed className="h-4 w-4 text-secondary" />
+              {property.banos} {property.banos === 1 ? 'Baño' : 'Baños'}
             </span>
           </div>
           <div className="flex flex-col p-2.5 border-l border-border/50">
@@ -212,6 +166,13 @@ export default async function PropertyPage({ params }: PageProps) {
             <span className="text-sm font-bold text-foreground mt-1.5 flex items-center gap-1.5">
               <Percent className="h-4 w-4 text-secondary" />
               {property.bono_pie > 0 ? `${property.bono_pie}%` : 'No Disponible'}
+            </span>
+          </div>
+          <div className="flex flex-col p-2.5 border-l border-border/50">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Tipología</span>
+            <span className="text-sm font-bold text-foreground mt-1.5 flex items-center gap-1.5">
+              <Building2 className="h-4 w-4 text-secondary" />
+              {property.tipologia}
             </span>
           </div>
         </section>

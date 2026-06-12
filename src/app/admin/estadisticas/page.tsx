@@ -11,7 +11,7 @@ import {
 export const revalidate = 0;
 
 export default async function AdminEstadisticasPage() {
-  const properties = await db.getProperties({ onlyPublished: false });
+  const properties = await db.getProperties({ onlyPublished: false, includeImages: false });
   const stats = await db.getDashboardStats();
   const leads = await db.getLeads();
 

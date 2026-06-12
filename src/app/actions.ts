@@ -181,3 +181,26 @@ export async function deleteLeadAction(id: string) {
     return { success: false, error: String(error) };
   }
 }
+
+const IMGBB_API_KEY = process.env.IMGBB_API_KEY || '';
+
+export async function uploadToImgbb(base64: string, fileName: string) {
+  try {
+    const res = await fetch('https://api.imgbb.com/1/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        key: IMGBB_API_KEY,
+        image: base64.replace(/^data:image\/\w+;base64,/, ''),
+        name: fileName,
+      }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      return { success: true as const, url: json.data.url };
+    }
+    return { success: false as const, error: json.error?.message || 'Error al subir imagen' };
+  } catch (err) {
+    return { success: false as const, error: String(err) };
+  }
+}

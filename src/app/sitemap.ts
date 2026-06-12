@@ -5,7 +5,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://propiapp.cl';
 
   // Fetch all published properties
-  const properties = await db.getProperties({ onlyPublished: true });
+  const properties = await db.getProperties({ onlyPublished: true, includeImages: false });
 
   const propertyUrls = properties.map((prop) => ({
     url: `${baseUrl}/propiedades/${prop.slug}`,

@@ -10,7 +10,7 @@ export const revalidate = 0;
 export default async function AdminLeadsPage() {
   const [leads, properties] = await Promise.all([
     db.getLeads(),
-    db.getProperties({ onlyPublished: false }),
+    db.getProperties({ onlyPublished: false, includeImages: false }),
   ]);
 
   return (

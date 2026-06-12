@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { COMUNAS } from '@/lib/comunas';
+import { COMUNAS, COMUNA_COORDS } from '@/lib/comunas';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -17,11 +17,14 @@ import {
   Image as ImageIcon,
   Send,
   Loader2,
-  FileText
+  FileText,
+  Expand,
+  X,
+  MapPin,
 } from 'lucide-react';
 import { Property, PropertyImage } from '@/types';
-import { createPropertyAction, updatePropertyAction } from '@/app/actions';
-import { supabase } from '@/lib/supabase';
+import { createPropertyAction, updatePropertyAction, uploadToImgbb } from '@/app/actions';
+import LocationPicker from './LocationPicker';
 
 interface PropertyWizardProps {
   property?: Property;
@@ -30,16 +33,14 @@ interface PropertyWizardProps {
 const AMENITY_OPTIONS = [
   'Piscina',
   'Gimnasio',
-  'Quincho panorámico',
+  'Quincho',
   'Coworking',
-  'Lavandería inteligente',
+  'Lavandería',
   'Sala Multiuso',
-  'Bicicletero con taller',
+  'Bicicletero',
   'Estacionamiento de visitas',
   'Seguridad 24/7',
-  'Club House',
-  'Juegos infantiles',
-  'Piscina temperada'
+  'Juegos',
 ];
 
 export default function PropertyWizard({ property }: PropertyWizardProps) {
@@ -55,6 +56,7 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
   const [tipologia, setTipologia] = useState(property?.tipologia || 'Departamento');
   const [precioDesdeUf, setPrecioDesdeUf] = useState<number | ''>(property?.precio_desde_uf || '');
   const [dormitorios, setDormitorios] = useState<number | ''>(property?.dormitorios || '');
+  const [banos, setBanos] = useState<number | ''>(property?.banos || '');
   const [descripcion, setDescripcion] = useState(property?.descripcion || '');
 
   const [bonoPie, setBonoPie] = useState<number | ''>(property?.bono_pie ?? '');
@@ -74,6 +76,10 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
     })) || []
   );
   const [imageUrlInput, setImageUrlInput] = useState('');
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const [lat, setLat] = useState<number | undefined>(property?.lat);
+  const [lng, setLng] = useState<number | undefined>(property?.lng);
 
   const [published, setPublished] = useState(property?.published ?? false);
 
@@ -108,50 +114,31 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
 
     try {
       const file = files[0];
-      let publicUrl = '';
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
 
-      if (supabase) {
-        try {
-          const bucket = 'property_images';
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${Math.random().toString(36).substr(2, 9)}_${Date.now()}.${fileExt}`;
-          const filePath = fileName;
+      const result = await uploadToImgbb(base64, file.name);
 
-          const { error: uploadError } = await supabase.storage
-            .from(bucket)
-            .upload(filePath, file);
-
-          if (!uploadError) {
-            const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-            publicUrl = data.publicUrl;
-          } else {
-            console.warn('Supabase Storage upload failed, falling back to base64:', uploadError.message);
-          }
-        } catch (storageErr) {
-          console.warn('Supabase Storage error, falling back to base64:', storageErr);
-        }
-      }
-
-      if (!publicUrl) {
-        publicUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
+      if (!result.success || !result.url) {
+        setErrorMsg('Error al subir imagen a imgbb. Verifica tu conexión.');
+        return;
       }
 
       const isPrimary = images.length === 0;
       setImages([
         ...images,
         {
-          image_url: publicUrl,
+          image_url: result.url,
           is_primary: isPrimary,
           sort_order: images.length
         }
       ]);
     } catch (err) {
       console.error('File upload error:', err);
-      setErrorMsg('Error al subir archivo. Verifica tus políticas de Supabase Storage.');
+      setErrorMsg('Error al subir archivo.');
     } finally {
       setLoading(false);
     }
@@ -188,13 +175,14 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
       if (!comuna) return 'Ingresa la comuna.';
       if (precioDesdeUf === '' || precioDesdeUf <= 0) return 'Ingresa un precio en UF válido.';
       if (dormitorios === '' || dormitorios < 0) return 'Ingresa un número de dormitorios.';
+      if (banos === '' || banos < 1) return 'Selecciona la cantidad de baños.';
     }
     if (currentStep === 3) {
       if (!ejecutivoNombre) return 'Ingresa el nombre del ejecutivo.';
       if (!ejecutivoWhatsapp) return 'Ingresa el WhatsApp del ejecutivo.';
       if (!ejecutivoEmail) return 'Ingresa el correo del ejecutivo.';
     }
-    if (currentStep === 4) {
+    if (currentStep === 5) {
       if (images.length === 0) return 'Debes agregar al menos una fotografía para el proyecto.';
       if (!images.some(img => img.is_primary)) return 'Debes marcar una imagen como principal.';
     }
@@ -226,6 +214,7 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
       tipologia,
       precio_desde_uf: Number(precioDesdeUf),
       dormitorios: Number(dormitorios),
+      banos: Number(banos),
       bono_pie: bonoPie === '' ? 0 : Number(bonoPie),
       entrega_inmediata: entregaInmediata,
       descripcion,
@@ -235,6 +224,8 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
       ejecutivo_whatsapp: ejecutivoWhatsapp,
       ejecutivo_email: ejecutivoEmail,
       brochure_url: '',
+      lat: lat ?? undefined,
+      lng: lng ?? undefined,
       featured: property?.featured || false,
       published,
     };
@@ -279,8 +270,9 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
             { step: 1, label: 'Básico', icon: Building2 },
             { step: 2, label: 'Beneficios', icon: ShieldCheck },
             { step: 3, label: 'Ejecutivo', icon: User },
-            { step: 4, label: 'Multimedia', icon: ImageIcon },
-            { step: 5, label: 'Publicación', icon: Send },
+            { step: 4, label: 'Mapa', icon: MapPin },
+            { step: 5, label: 'Multimedia', icon: ImageIcon },
+            { step: 6, label: 'Publicación', icon: Send },
           ].map((item) => {
             const Icon = item.icon;
             const isCompleted = currentStep > item.step;
@@ -367,7 +359,7 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Precio Desde (UF) *</label>
                 <input
@@ -381,15 +373,31 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Dormitorios (Cantidad) *</label>
-                <input
-                  type="number"
-                  required
-                  placeholder="Ej: 2"
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Dormitorios *</label>
+                <select
                   value={dormitorios}
                   onChange={(e) => setDormitorios(e.target.value === '' ? '' : Number(e.target.value))}
                   className="h-10 px-3 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring"
-                />
+                >
+                  <option value="">Seleccionar</option>
+                  {[1, 2, 3, 4, 5, 6].map(n => (
+                    <option key={n} value={n}>{n} {n === 1 ? 'Dormitorio' : 'Dormitorios'}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Baños *</label>
+                <select
+                  value={banos}
+                  onChange={(e) => setBanos(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="h-10 px-3 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring"
+                >
+                  <option value="">Seleccionar</option>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <option key={n} value={n}>{n} {n === 1 ? 'Baño' : 'Baños'}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -536,11 +544,38 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
           </div>
         )}
 
-        {/* --- STEP 4: MULTIMEDIA & BROCHURE --- */}
+        {/* --- STEP 4: MAP --- */}
         {currentStep === 4 && (
           <div className="flex flex-col gap-5">
             <div>
-              <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Paso 4: Archivos y Galería</h2>
+              <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Paso 4: Ubicación en el Mapa</h2>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Arrastra el marcador para ubicar el proyecto en el mapa.</p>
+            </div>
+
+            <div className="bg-card border border-border p-4 rounded-xl flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <MapPin className="h-4 w-4 text-primary" />
+                <span>Comuna seleccionada: <strong className="text-foreground">{comuna || 'No seleccionada'}</strong></span>
+              </div>
+
+              <LocationPicker
+                comuna={comuna}
+                initialLat={lat}
+                initialLng={lng}
+                onLocationChange={(newLat, newLng) => {
+                  setLat(newLat);
+                  setLng(newLng);
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* --- STEP 5: MULTIMEDIA & BROCHURE --- */}
+        {currentStep === 5 && (
+          <div className="flex flex-col gap-5">
+            <div>
+              <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Paso 5: Archivos y Galería</h2>
               <p className="text-[11px] text-muted-foreground mt-0.5">Carga las fotografías del proyecto y el brochure comercial.</p>
             </div>
 
@@ -589,11 +624,11 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
                   <span>No has agregado imágenes todavía.</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {images.map((img, i) => (
                     <div 
                       key={i} 
-                      className="group relative aspect-video rounded-lg overflow-hidden border border-border bg-muted"
+                      className="group relative aspect-[4/3] rounded-lg overflow-hidden border border-border bg-muted"
                     >
                       <img
                         src={img.image_url}
@@ -602,6 +637,14 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
                       />
                       
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage(img.image_url)}
+                          className="p-1.5 rounded bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                          title="Vista previa"
+                        >
+                          <Expand className="h-3.5 w-3.5" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => setPrimaryImage(i)}
@@ -634,15 +677,35 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
                   ))}
                 </div>
               )}
+
+              {previewImage && (
+                <div
+                  className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+                  onClick={() => setPreviewImage(null)}
+                >
+                  <button
+                    onClick={() => setPreviewImage(null)}
+                    className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                  <img
+                    src={previewImage}
+                    alt="Vista previa"
+                    className="max-w-full max-h-[90vh] object-contain rounded-lg"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* --- STEP 5: REVIEW & PUBLICATION --- */}
-        {currentStep === 5 && (
+        {/* --- STEP 6: REVIEW & PUBLICATION --- */}
+        {currentStep === 6 && (
           <div className="flex flex-col gap-6">
             <div>
-              <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Paso 5: Publicación y Estado</h2>
+              <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Paso 6: Publicación y Estado</h2>
               <p className="text-[11px] text-muted-foreground mt-0.5">Revisa el resumen y define si guardas en borrador o publicas ahora.</p>
             </div>
 
@@ -669,7 +732,7 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
                 </div>
                 <div>
                   <span className="text-muted-foreground font-medium block">Distribución:</span>
-                  <span className="font-bold text-foreground mt-0.5 block">{dormitorios} Dormitorios</span>
+                  <span className="font-bold text-foreground mt-0.5 block">{dormitorios} Dormitorios, {banos} Baños</span>
                 </div>
               </div>
 
@@ -741,7 +804,7 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
             Anterior
           </button>
 
-          {currentStep < 5 ? (
+          {currentStep < 6 ? (
             <button
               type="button"
               onClick={handleNextStep}

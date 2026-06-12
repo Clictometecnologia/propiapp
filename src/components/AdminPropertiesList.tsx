@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { 
@@ -24,46 +23,57 @@ interface AdminPropertiesListProps {
   properties: Property[];
 }
 
-export default function AdminPropertiesList({ properties }: AdminPropertiesListProps) {
-  const router = useRouter();
+export default function AdminPropertiesList({ properties: initial }: AdminPropertiesListProps) {
+  const [items, setItems] = useState<Property[]>(initial);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
 
-  const filtered = properties.filter(p => 
+  const filtered = items.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.comuna.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleTogglePublish = async (id: string, currentlyPublished: boolean) => {
+    const newPublished = !currentlyPublished;
+    // Optimistic update
+    setItems(prev => prev.map(p => p.id === id ? { ...p, published: newPublished } : p));
     setActionId(id);
-    const result = await togglePublishAction(id, !currentlyPublished);
+    const result = await togglePublishAction(id, newPublished);
     setActionId(null);
     if (!result.success) {
+      // Revert on failure
+      setItems(prev => prev.map(p => p.id === id ? { ...p, published: currentlyPublished } : p));
       alert('Error: ' + (result.error || 'No se pudo cambiar el estado.'));
-      return;
-    }
-    router.refresh();
-  };
-  const handleDuplicate = (id: string) => {
-    if (confirm('¿Estás seguro de que quieres duplicar este proyecto?')) {
-      setActionId(id);
-      startTransition(async () => {
-        await duplicatePropertyAction(id);
-        setActionId(null);
-        router.refresh();
-      });
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Estás seguro de que quieres eliminar definitivamente este proyecto? Esta acción no se puede deshacer.')) {
-      setActionId(id);
-      startTransition(async () => {
-        await deletePropertyAction(id);
-        setActionId(null);
-        router.refresh();
-      });
+  const handleDuplicate = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres duplicar este proyecto?')) return;
+    setActionId(id);
+    const result = await duplicatePropertyAction(id);
+    setActionId(null);
+    if (result.success && result.property) {
+      setItems(prev => [result.property!, ...prev]);
+    } else {
+      alert('Error al duplicar: ' + (result.error || 'Desconocido'));
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const target = items.find(p => p.id === id);
+    if (!target) return;
+    if (target.published) {
+      alert('No puedes eliminar un proyecto que está activo. Deshabilítalo (pasa a Borrador) primero.');
+      return;
+    }
+    if (!confirm('¿Estás seguro de que quieres eliminar definitivamente este proyecto? Esta acción no se puede deshacer.')) return;
+    // Optimistic removal
+    setItems(prev => prev.filter(p => p.id !== id));
+    const result = await deletePropertyAction(id);
+    if (!result.success) {
+      // Revert on failure
+      setItems(prev => [...prev, target]);
+      alert('Error al eliminar: ' + (result.error || 'Desconocido'));
     }
   };
 
@@ -109,7 +119,7 @@ export default function AdminPropertiesList({ properties }: AdminPropertiesListP
                 <th className="py-4 px-5">Proyecto</th>
                 <th className="py-4 px-5">Ubicación</th>
                 <th className="py-4 px-5">Precio UF</th>
-                <th className="py-4 px-5">Hab.</th>
+                <th className="py-4 px-5">Detalles</th>
                 <th className="py-4 px-5">Estado</th>
                 <th className="py-4 px-5">Creación</th>
                 <th className="py-4 px-5 text-right">Acciones</th>
@@ -158,7 +168,11 @@ export default function AdminPropertiesList({ properties }: AdminPropertiesListP
                         UF {formatUF(property.precio_desde_uf)}
                       </td>
 
-                      <td className="py-4 px-5 text-foreground">{property.dormitorios} {property.dormitorios === 1 ? 'hab' : 'habs'}</td>
+                      <td className="py-4 px-5 text-foreground text-[11px] leading-relaxed">
+                        <span>{property.dormitorios} hab</span>
+                        <span className="mx-1.5 text-muted-foreground">·</span>
+                        <span>{property.banos} baños</span>
+                      </td>
 
                       <td className="py-4 px-5">
                         <button

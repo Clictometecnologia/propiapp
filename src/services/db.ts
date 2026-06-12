@@ -49,6 +49,7 @@ export const db = {
     entregaInmediata?: boolean;
     bonoPie?: boolean;
     onlyPublished?: boolean;
+    includeImages?: boolean;
   }): Promise<Property[]> {
     const sb = await getClient();
     if (!sb) return [];
@@ -56,7 +57,8 @@ export const db = {
     try {
       let query = sb
         .from('properties')
-        .select('*, images:property_images(*)');
+        .select(filters?.includeImages !== false ? '*, images:property_images(*)' : '*')
+        .limit(100);
 
       if (filters?.onlyPublished) query = query.eq('published', true);
       if (filters?.comuna && filters.comuna !== 'all') query = query.eq('comuna', filters.comuna);
@@ -71,11 +73,54 @@ export const db = {
 
       const { data, error } = await query;
       if (error) {
+        const isTimeout = error.message?.includes('timeout') || error.code === '57014';
+        if (isTimeout) {
+          console.warn('Supabase getProperties timeout, retrying once...');
+          await new Promise(r => setTimeout(r, 2000));
+          const retryQuery = sb
+            .from('properties')
+            .select('*')
+            .limit(50);
+          if (filters?.onlyPublished) retryQuery.eq('published', true);
+          if (filters?.comuna && filters.comuna !== 'all') retryQuery.eq('comuna', filters.comuna);
+          if (filters?.tipologia && filters.tipologia !== 'all') retryQuery.eq('tipologia', filters.tipologia);
+          if (filters?.dormitorios) retryQuery.gte('dormitorios', filters.dormitorios);
+          if (filters?.precioMin) retryQuery.gte('precio_desde_uf', filters.precioMin);
+          if (filters?.precioMax) retryQuery.lte('precio_desde_uf', filters.precioMax);
+          if (filters?.entregaInmediata !== undefined) retryQuery.eq('entrega_inmediata', filters.entregaInmediata);
+          if (filters?.bonoPie !== undefined) retryQuery.gt('bono_pie', 0);
+          retryQuery.order('created_at', { ascending: false });
+
+          const { data: retryData } = await retryQuery;
+          if (retryData) return retryData as unknown as Property[];
+        }
         console.error('Supabase getProperties error:', error.message);
         return [];
       }
-      return (data || []) as Property[];
+      return (data || []) as unknown as Property[];
     } catch (err) {
+      const isTimeout = String(err).includes('timeout') || String(err).includes('57014');
+      if (isTimeout) {
+        console.warn('Supabase getProperties timeout (exception), retrying once...');
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const retryQuery = sb
+            .from('properties')
+            .select('*')
+            .limit(50);
+          if (filters?.onlyPublished) retryQuery.eq('published', true);
+          if (filters?.comuna && filters.comuna !== 'all') retryQuery.eq('comuna', filters.comuna);
+          if (filters?.tipologia && filters.tipologia !== 'all') retryQuery.eq('tipologia', filters.tipologia);
+          if (filters?.dormitorios) retryQuery.gte('dormitorios', filters.dormitorios);
+          if (filters?.precioMin) retryQuery.gte('precio_desde_uf', filters.precioMin);
+          if (filters?.precioMax) retryQuery.lte('precio_desde_uf', filters.precioMax);
+          if (filters?.entregaInmediata !== undefined) retryQuery.eq('entrega_inmediata', filters.entregaInmediata);
+          if (filters?.bonoPie !== undefined) retryQuery.gt('bono_pie', 0);
+          retryQuery.order('created_at', { ascending: false });
+          const { data: retryData } = await retryQuery;
+          if (retryData) return retryData as unknown as Property[];
+        } catch {}
+      }
       console.error('Supabase getProperties exception:', err);
       return [];
     }
@@ -255,6 +300,7 @@ export const db = {
       tipologia: original.tipologia,
       precio_desde_uf: original.precio_desde_uf,
       dormitorios: original.dormitorios,
+      banos: original.banos,
       bono_pie: Number(original.bono_pie) || 0,
       entrega_inmediata: original.entrega_inmediata,
       descripcion: original.descripcion,
