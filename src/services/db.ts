@@ -1,41 +1,59 @@
-import { supabase } from '../lib/supabase';
+import { query } from '../lib/neon';
 import { Property, PropertyImage, Lead } from '../types';
-import { createServerSupabase } from '../lib/supabase-server';
-import { createAdminSupabase } from '@/lib/supabase-admin';
 
-function capitalizeEstado(s: string): Lead['estado'] {
-  return (s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()) as Lead['estado'];
-}
-
-function normalizeLead(l: any): Lead {
+function rowToProperty(row: any, images?: any[]): Property {
   return {
-    ...l,
-    estado: l.estado ? capitalizeEstado(l.estado) : l.estado,
-    property_name: l.properties?.name || 'Proyecto Eliminado'
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    comuna: row.comuna,
+    tipologia: row.tipologia,
+    precio_desde_uf: Number(row.precio_desde_uf),
+    dormitorios: row.dormitorios,
+    banos: row.banos,
+    bono_pie: Number(row.bono_pie),
+    entrega_inmediata: row.entrega_inmediata,
+    descripcion: row.descripcion,
+    amenidades: row.amenidades || [],
+    ejecutivo_nombre: row.ejecutivo_nombre,
+    ejecutivo_cargo: row.ejecutivo_cargo,
+    ejecutivo_whatsapp: row.ejecutivo_whatsapp,
+    ejecutivo_email: row.ejecutivo_email,
+    brochure_url: row.brochure_url,
+    lat: row.lat,
+    lng: row.lng,
+    featured: row.featured,
+    published: row.published,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    images: images || [],
   };
 }
 
-async function getClient() {
-  try {
-    const sb = await createServerSupabase();
-    if (sb) return sb;
-  } catch {}
-  return supabase;
+function rowToImage(row: any): PropertyImage {
+  return {
+    id: row.id,
+    property_id: row.property_id,
+    image_url: row.image_url,
+    is_primary: row.is_primary,
+    sort_order: row.sort_order,
+  };
 }
 
-async function getAdminClient() {
-  try {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('Missing SERVICE_ROLE_KEY');
-    const sb = await createAdminSupabase();
-    if (sb) return sb;
-  } catch {}
-  try {
-    const sb = await createServerSupabase();
-    if (sb) return sb;
-  } catch {}
-  return supabase;
+function rowToLead(row: any): Lead {
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    property_id: row.property_id,
+    nombre: row.nombre,
+    email: row.email,
+    telefono: row.telefono,
+    mensaje: row.mensaje,
+    estado: row.estado as Lead['estado'],
+    observacion: row.observacion,
+    property_name: row.property_name || 'Proyecto Eliminado',
+  };
 }
-
 
 export const db = {
   // --------------------------------------------------
@@ -52,143 +70,117 @@ export const db = {
     onlyPublished?: boolean;
     includeImages?: boolean;
   }): Promise<Property[]> {
-    const sb = await getClient();
-    if (!sb) return [];
-
     try {
-      let query = sb
-        .from('properties')
-        .select(filters?.includeImages !== false ? '*, images:property_images(*)' : '*')
-        .limit(100);
+      const conditions: string[] = [];
+      const params: any[] = [];
+      let paramIdx = 1;
 
-      if (filters?.onlyPublished) query = query.eq('published', true);
-      if (filters?.comuna && filters.comuna !== 'all') query = query.eq('comuna', filters.comuna);
-      if (filters?.tipologia && filters.tipologia !== 'all') query = query.eq('tipologia', filters.tipologia);
-      if (filters?.dormitorios) query = query.gte('dormitorios', filters.dormitorios);
-      if (filters?.precioMin) query = query.gte('precio_desde_uf', filters.precioMin);
-      if (filters?.precioMax) query = query.lte('precio_desde_uf', filters.precioMax);
-      if (filters?.entregaInmediata !== undefined) query = query.eq('entrega_inmediata', filters.entregaInmediata);
-      if (filters?.bonoPie !== undefined) query = query.gt('bono_pie', 0);
-
-      query = query.order('created_at', { ascending: false });
-
-      const { data, error } = await query;
-      if (error) {
-        const isTimeout = error.message?.includes('timeout') || error.code === '57014';
-        if (isTimeout) {
-          console.warn('Supabase getProperties timeout, retrying once...');
-          await new Promise(r => setTimeout(r, 2000));
-          const retryQuery = sb
-            .from('properties')
-            .select(filters?.includeImages !== false ? '*, images:property_images(*)' : '*')
-            .limit(50);
-          if (filters?.onlyPublished) retryQuery.eq('published', true);
-          if (filters?.comuna && filters.comuna !== 'all') retryQuery.eq('comuna', filters.comuna);
-          if (filters?.tipologia && filters.tipologia !== 'all') retryQuery.eq('tipologia', filters.tipologia);
-          if (filters?.dormitorios) retryQuery.gte('dormitorios', filters.dormitorios);
-          if (filters?.precioMin) retryQuery.gte('precio_desde_uf', filters.precioMin);
-          if (filters?.precioMax) retryQuery.lte('precio_desde_uf', filters.precioMax);
-          if (filters?.entregaInmediata !== undefined) retryQuery.eq('entrega_inmediata', filters.entregaInmediata);
-          if (filters?.bonoPie !== undefined) retryQuery.gt('bono_pie', 0);
-          retryQuery.order('created_at', { ascending: false });
-
-          const { data: retryData } = await retryQuery;
-          if (retryData) return retryData as unknown as Property[];
-        }
-        console.error('Supabase getProperties error:', error.message);
-        return [];
+      if (filters?.onlyPublished) {
+        conditions.push(`p.published = true`);
       }
-      return (data || []) as unknown as Property[];
+      if (filters?.comuna && filters.comuna !== 'all') {
+        conditions.push(`p.comuna = $${paramIdx++}`);
+        params.push(filters.comuna);
+      }
+      if (filters?.tipologia && filters.tipologia !== 'all') {
+        conditions.push(`p.tipologia = $${paramIdx++}`);
+        params.push(filters.tipologia);
+      }
+      if (filters?.dormitorios) {
+        conditions.push(`p.dormitorios >= $${paramIdx++}`);
+        params.push(filters.dormitorios);
+      }
+      if (filters?.precioMin) {
+        conditions.push(`p.precio_desde_uf >= $${paramIdx++}`);
+        params.push(filters.precioMin);
+      }
+      if (filters?.precioMax) {
+        conditions.push(`p.precio_desde_uf <= $${paramIdx++}`);
+        params.push(filters.precioMax);
+      }
+      if (filters?.entregaInmediata !== undefined) {
+        conditions.push(`p.entrega_inmediata = $${paramIdx++}`);
+        params.push(filters.entregaInmediata);
+      }
+      if (filters?.bonoPie !== undefined) {
+        conditions.push(`p.bono_pie > 0`);
+      }
+
+      const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+      const includeImages = filters?.includeImages !== false;
+
+      const sql = `
+        SELECT p.* ${includeImages ? `, COALESCE(json_agg(pi.*) FILTER (WHERE pi.id IS NOT NULL), '[]'::json) AS images` : ''}
+        FROM properties p
+        ${includeImages ? 'LEFT JOIN property_images pi ON pi.property_id = p.id' : ''}
+        ${where}
+        GROUP BY p.id
+        ORDER BY p.created_at DESC
+        LIMIT 100
+      `;
+
+      const result = await query(sql, params);
+      return result.rows.map(row => {
+        const images = includeImages ? (row.images || []).map(rowToImage) : [];
+        return rowToProperty(row, images);
+      });
     } catch (err) {
-      const isTimeout = String(err).includes('timeout') || String(err).includes('57014');
-      if (isTimeout) {
-        console.warn('Supabase getProperties timeout (exception), retrying once...');
-        await new Promise(r => setTimeout(r, 2000));
-        try {
-          const retryQuery = sb
-            .from('properties')
-            .select(filters?.includeImages !== false ? '*, images:property_images(*)' : '*')
-            .limit(50);
-          if (filters?.onlyPublished) retryQuery.eq('published', true);
-          if (filters?.comuna && filters.comuna !== 'all') retryQuery.eq('comuna', filters.comuna);
-          if (filters?.tipologia && filters.tipologia !== 'all') retryQuery.eq('tipologia', filters.tipologia);
-          if (filters?.dormitorios) retryQuery.gte('dormitorios', filters.dormitorios);
-          if (filters?.precioMin) retryQuery.gte('precio_desde_uf', filters.precioMin);
-          if (filters?.precioMax) retryQuery.lte('precio_desde_uf', filters.precioMax);
-          if (filters?.entregaInmediata !== undefined) retryQuery.eq('entrega_inmediata', filters.entregaInmediata);
-          if (filters?.bonoPie !== undefined) retryQuery.gt('bono_pie', 0);
-          retryQuery.order('created_at', { ascending: false });
-          const { data: retryData } = await retryQuery;
-          if (retryData) return retryData as unknown as Property[];
-        } catch {}
-      }
-      console.error('Supabase getProperties exception:', err);
+      console.error('Neon getProperties error:', err);
       return [];
     }
   },
 
   async getPropertyBySlug(slug: string): Promise<Property | null> {
-    const sb = await getClient();
-    if (!sb) return null;
-
     try {
-      const { data, error } = await sb
-        .from('properties')
-        .select('*, images:property_images(*)')
-        .eq('slug', slug)
-        .maybeSingle();
-      if (error) {
-        console.error('Supabase getPropertyBySlug error:', error.message);
-        return null;
-      }
-      return data as Property | null;
+      const result = await query(`
+        SELECT p.*, COALESCE(json_agg(pi.*) FILTER (WHERE pi.id IS NOT NULL), '[]'::json) AS images
+        FROM properties p
+        LEFT JOIN property_images pi ON pi.property_id = p.id
+        WHERE p.slug = $1
+        GROUP BY p.id
+        LIMIT 1
+      `, [slug]);
+      if (result.rows.length === 0) return null;
+      const row = result.rows[0];
+      return rowToProperty(row, (row.images || []).map(rowToImage));
     } catch (err) {
-      console.error('Supabase getPropertyBySlug exception:', err);
+      console.error('Neon getPropertyBySlug error:', err);
       return null;
     }
   },
 
   async getPropertyById(id: string): Promise<Property | null> {
-    const sb = await getClient();
-    if (!sb) return null;
-
     try {
-      const { data, error } = await sb
-        .from('properties')
-        .select('*, images:property_images(*)')
-        .eq('id', id)
-        .maybeSingle();
-      if (error) {
-        console.error('Supabase getPropertyById error:', error.message);
-        return null;
-      }
-      return data as Property | null;
+      const result = await query(`
+        SELECT p.*, COALESCE(json_agg(pi.*) FILTER (WHERE pi.id IS NOT NULL), '[]'::json) AS images
+        FROM properties p
+        LEFT JOIN property_images pi ON pi.property_id = p.id
+        WHERE p.id = $1
+        GROUP BY p.id
+        LIMIT 1
+      `, [id]);
+      if (result.rows.length === 0) return null;
+      const row = result.rows[0];
+      return rowToProperty(row, (row.images || []).map(rowToImage));
     } catch (err) {
-      console.error('Supabase getPropertyById exception:', err);
+      console.error('Neon getPropertyById error:', err);
       return null;
     }
   },
 
   async getRelatedProperties(propertyId: string, comuna: string, tipologia: string, limit = 3): Promise<Property[]> {
-    const sb = await getClient();
-    if (!sb) return [];
-
     try {
-      const { data, error } = await sb
-        .from('properties')
-        .select('*, images:property_images(*)')
-        .neq('id', propertyId)
-        .eq('published', true)
-        .or(`comuna.eq.${comuna},tipologia.eq.${tipologia}`)
-        .limit(limit);
-
-      if (error) {
-        console.error('Supabase getRelatedProperties error:', error.message);
-        return [];
-      }
-      return (data || []) as Property[];
+      const result = await query(`
+        SELECT p.*, COALESCE(json_agg(pi.*) FILTER (WHERE pi.id IS NOT NULL), '[]'::json) AS images
+        FROM properties p
+        LEFT JOIN property_images pi ON pi.property_id = p.id
+        WHERE p.id != $1 AND p.published = true AND (p.comuna = $2 OR p.tipologia = $3)
+        GROUP BY p.id
+        LIMIT $4
+      `, [propertyId, comuna, tipologia, limit]);
+      return result.rows.map(row => rowToProperty(row, (row.images || []).map(rowToImage)));
     } catch (err) {
-      console.error('Supabase getRelatedProperties exception:', err);
+      console.error('Neon getRelatedProperties error:', err);
       return [];
     }
   },
@@ -200,35 +192,43 @@ export const db = {
     propertyData: Omit<Property, 'id' | 'created_at' | 'updated_at' | 'images'>,
     imagesData: Omit<PropertyImage, 'id' | 'property_id'>[]
   ): Promise<Property> {
-    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
-
     const slug = propertyData.slug || propertyData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-    const { data: prop, error: propErr } = await sb
-      .from('properties')
-      .insert([{ ...propertyData, slug }])
-      .select()
-      .single();
+    const result = await query(`
+      INSERT INTO properties (name, slug, comuna, tipologia, precio_desde_uf, dormitorios, banos, bono_pie,
+        entrega_inmediata, descripcion, amenidades, ejecutivo_nombre, ejecutivo_cargo, ejecutivo_whatsapp,
+        ejecutivo_email, brochure_url, lat, lng, featured, published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      RETURNING id
+    `, [
+      propertyData.name, slug, propertyData.comuna, propertyData.tipologia, propertyData.precio_desde_uf,
+      propertyData.dormitorios, propertyData.banos, propertyData.bono_pie || 0, propertyData.entrega_inmediata,
+      propertyData.descripcion, propertyData.amenidades, propertyData.ejecutivo_nombre,
+      propertyData.ejecutivo_cargo, propertyData.ejecutivo_whatsapp, propertyData.ejecutivo_email,
+      propertyData.brochure_url || '', propertyData.lat ?? null, propertyData.lng ?? null,
+      propertyData.featured || false, propertyData.published || false,
+    ]);
 
-    if (propErr) throw new Error(`Error al crear propiedad: ${propErr.message}`);
+    const propId = result.rows[0].id;
 
     if (imagesData && imagesData.length > 0) {
-      const finalImages = imagesData.map(img => ({
-        property_id: prop.id,
-        image_url: img.image_url,
-        is_primary: img.is_primary,
-        sort_order: img.sort_order,
-      }));
+      const imgValues = imagesData.map((img, i) => {
+        const offset = i * 4;
+        return `($1, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+      }).join(', ');
 
-      const { error: imgErr } = await sb
-        .from('property_images')
-        .insert(finalImages);
+      const imgParams: any[] = [propId];
+      for (const img of imagesData) {
+        imgParams.push(img.image_url, img.is_primary, img.sort_order);
+      }
 
-      if (imgErr) throw new Error(`Error al guardar imágenes: ${imgErr.message}`);
+      await query(`
+        INSERT INTO property_images (property_id, image_url, is_primary, sort_order)
+        VALUES ${imgValues}
+      `, imgParams);
     }
 
-    const fullProp = await this.getPropertyById(prop.id);
-    return fullProp || (prop as Property);
+    return (await this.getPropertyById(propId))!;
   },
 
   async updateProperty(
@@ -236,34 +236,53 @@ export const db = {
     propertyData: Partial<Omit<Property, 'id' | 'created_at' | 'updated_at' | 'images'>>,
     imagesData?: Omit<PropertyImage, 'id' | 'property_id'>[]
   ): Promise<Property> {
-    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
 
-    const nowStr = new Date().toISOString();
+    for (const [key, value] of Object.entries(propertyData)) {
+      const col = key === 'precio_desde_uf' ? key
+        : key === 'entrega_inmediata' ? key
+        : key === 'bono_pie' ? key
+        : key === 'ejecutivo_nombre' ? 'ejecutivo_nombre'
+        : key === 'ejecutivo_cargo' ? 'ejecutivo_cargo'
+        : key === 'ejecutivo_whatsapp' ? 'ejecutivo_whatsapp'
+        : key === 'ejecutivo_email' ? 'ejecutivo_email'
+        : key === 'brochure_url' ? 'brochure_url'
+        : key === 'lat' ? 'lat'
+        : key === 'lng' ? 'lng'
+        : key;
+      const dbCol = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+      sets.push(`${dbCol} = $${idx++}`);
+      params.push(value ?? null);
+    }
 
-    const { error: propErr } = await sb
-      .from('properties')
-      .update({ ...propertyData, updated_at: nowStr })
-      .eq('id', id);
+    sets.push(`updated_at = now()`);
+    params.push(id);
 
-    if (propErr) throw new Error(`Error al actualizar propiedad: ${propErr.message}`);
+    await query(`
+      UPDATE properties SET ${sets.join(', ')}
+      WHERE id = $${idx}
+    `, params);
 
     if (imagesData) {
-      const { error: delErr } = await sb
-        .from('property_images')
-        .delete()
-        .eq('property_id', id);
-      if (delErr) throw new Error(`Error al reemplazar imágenes: ${delErr.message}`);
+      await query(`DELETE FROM property_images WHERE property_id = $1`, [id]);
 
       if (imagesData.length > 0) {
-        const { error: insErr } = await sb
-          .from('property_images')
-          .insert(imagesData.map(img => ({
-            property_id: id,
-            image_url: img.image_url,
-            is_primary: img.is_primary,
-            sort_order: img.sort_order,
-          })));
-        if (insErr) throw new Error(`Error al insertar imágenes: ${insErr.message}`);
+        const imgValues = imagesData.map((_, i) => {
+          const offset = i * 4;
+          return `($1, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+        }).join(', ');
+
+        const imgParams: any[] = [id];
+        for (const img of imagesData) {
+          imgParams.push(img.image_url, img.is_primary, img.sort_order);
+        }
+
+        await query(`
+          INSERT INTO property_images (property_id, image_url, is_primary, sort_order)
+          VALUES ${imgValues}
+        `, imgParams);
       }
     }
 
@@ -273,14 +292,7 @@ export const db = {
   },
 
   async deleteProperty(id: string): Promise<boolean> {
-    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
-
-    const { error } = await sb
-      .from('properties')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw new Error(`Error al eliminar propiedad: ${error.message}`);
+    await query(`DELETE FROM properties WHERE id = $1`, [id]);
     return true;
   },
 
@@ -322,104 +334,99 @@ export const db = {
   // Leads Operations
   // --------------------------------------------------
   async getLeads(filters?: { propertyId?: string; search?: string; estado?: string }): Promise<Lead[]> {
-    const sb = await getClient();
-    if (!sb) return [];
-
     try {
-      let query = sb
-        .from('leads')
-        .select('*, properties(name)');
+      const conditions: string[] = [];
+      const params: any[] = [];
+      let idx = 1;
 
-      if (filters?.propertyId) query = query.eq('property_id', filters.propertyId);
-      if (filters?.estado && filters.estado !== 'all') query = query.eq('estado', filters.estado.toLowerCase());
-
+      if (filters?.propertyId) {
+        conditions.push(`l.property_id = $${idx++}`);
+        params.push(filters.propertyId);
+      }
+      if (filters?.estado && filters.estado !== 'all') {
+        conditions.push(`l.estado = $${idx++}`);
+        params.push(filters.estado.toLowerCase());
+      }
       if (filters?.search) {
         const q = `%${filters.search.toLowerCase()}%`;
-        query = query.or(`nombre.ilike.${q},email.ilike.${q}`);
+        conditions.push(`(LOWER(l.nombre) LIKE $${idx} OR LOWER(l.email) LIKE $${idx})`);
+        params.push(q);
+        idx++;
       }
 
-      query = query.order('created_at', { ascending: false }).limit(500);
+      const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-      const { data, error } = await query;
-      if (error) {
-        console.error('Supabase getLeads error:', error.message);
-        return [];
-      }
+      const result = await query(`
+        SELECT l.*, p.name AS property_name
+        FROM leads l
+        LEFT JOIN properties p ON p.id = l.property_id
+        ${where}
+        ORDER BY l.created_at DESC
+        LIMIT 500
+      `, params);
 
-      return (data || []).map((l: any) => normalizeLead(l));
+      return result.rows.map(rowToLead);
     } catch (err) {
-      console.error('Supabase getLeads exception:', err);
+      console.error('Neon getLeads error:', err);
       return [];
     }
   },
 
   async createLead(leadData: Omit<Lead, 'id' | 'created_at'>): Promise<Lead> {
-    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
-
-    const { data, error } = await sb
-      .from('leads')
-      .insert([{ ...leadData, estado: leadData.estado }])
-      .select()
-      .single();
-
-    if (error) throw new Error(`Error al crear lead: ${error.message}`);
-    return normalizeLead(data);
+    const estado = leadData.estado.charAt(0).toUpperCase() + leadData.estado.slice(1).toLowerCase();
+    const result = await query(`
+      INSERT INTO leads (property_id, nombre, email, telefono, mensaje, estado, observacion)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [
+      leadData.property_id, leadData.nombre, leadData.email,
+      leadData.telefono, leadData.mensaje, estado, leadData.observacion || '',
+    ]);
+    return rowToLead(result.rows[0]);
   },
 
   async updateLeadStatus(id: string, estado: Lead['estado']): Promise<Lead> {
-    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
-
-    const { data, error } = await sb
-      .from('leads')
-      .update({ estado })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw new Error(`Error al actualizar estado del lead: ${error.message}`);
-    return { ...data, estado: capitalizeEstado(data.estado) } as Lead;
+    const value = typeof estado === 'string' ? estado.charAt(0).toUpperCase() + estado.slice(1).toLowerCase() : estado;
+    const result = await query(`
+      UPDATE leads SET estado = $1 WHERE id = $2 RETURNING *
+    `, [value, id]);
+    return rowToLead(result.rows[0]);
   },
 
   async updateLeadObservation(id: string, observacion: string): Promise<Lead> {
-    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
-
-    const { data, error } = await sb
-      .from('leads')
-      .update({ observacion })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw new Error(`Error al actualizar observación: ${error.message}`);
-    return normalizeLead(data);
+    const result = await query(`
+      UPDATE leads SET observacion = $1 WHERE id = $2 RETURNING *
+    `, [observacion, id]);
+    return rowToLead(result.rows[0]);
   },
 
   async updateLead(id: string, data: Partial<Omit<Lead, 'id' | 'created_at' | 'property_name'>>): Promise<Lead> {
-    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
 
-    const payload = { ...data } as any;
-    // estado already in correct format (no lowercase conversion needed)
+    if (data.nombre !== undefined) { sets.push(`nombre = $${idx++}`); params.push(data.nombre); }
+    if (data.email !== undefined) { sets.push(`email = $${idx++}`); params.push(data.email); }
+    if (data.telefono !== undefined) { sets.push(`telefono = $${idx++}`); params.push(data.telefono); }
+    if (data.mensaje !== undefined) { sets.push(`mensaje = $${idx++}`); params.push(data.mensaje); }
+    if (data.estado !== undefined) {
+      sets.push(`estado = $${idx++}`);
+      params.push(typeof data.estado === 'string' ? data.estado.charAt(0).toUpperCase() + data.estado.slice(1).toLowerCase() : data.estado);
+    }
+    if (data.observacion !== undefined) { sets.push(`observacion = $${idx++}`); params.push(data.observacion); }
+    if (data.property_id !== undefined) { sets.push(`property_id = $${idx++}`); params.push(data.property_id); }
 
-    const { data: updated, error } = await sb
-      .from('leads')
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .single();
+    if (sets.length === 0) throw new Error('No hay campos para actualizar');
+    params.push(id);
 
-    if (error) throw new Error(`Error al actualizar lead: ${error.message}`);
-    return normalizeLead(updated);
+    const result = await query(`
+      UPDATE leads SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *
+    `, params);
+    return rowToLead(result.rows[0]);
   },
 
   async deleteLead(id: string): Promise<boolean> {
-    const sb = await getAdminClient();  if (!sb) throw new Error('Supabase no está configurado');
-
-    const { error } = await sb
-      .from('leads')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw new Error(`Error al eliminar lead: ${error.message}`);
+    await query(`DELETE FROM leads WHERE id = $1`, [id]);
     return true;
   },
 
@@ -427,30 +434,24 @@ export const db = {
   // Analytics Tracking
   // --------------------------------------------------
   async trackPropertyView(propertyId: string): Promise<void> {
-    const sb = await getClient();
-    if (!sb) return;
     try {
-      await sb.from('property_views').insert([{ property_id: propertyId }]);
+      await query(`INSERT INTO property_views (property_id) VALUES ($1)`, [propertyId]);
     } catch (err) {
       console.error('Error tracking view:', err);
     }
   },
 
   async trackWhatsappClick(propertyId: string): Promise<void> {
-    const sb = await getClient();
-    if (!sb) return;
     try {
-      await sb.from('whatsapp_clicks').insert([{ property_id: propertyId }]);
+      await query(`INSERT INTO whatsapp_clicks (property_id) VALUES ($1)`, [propertyId]);
     } catch (err) {
       console.error('Error tracking whatsapp click:', err);
     }
   },
 
   async trackBrochureDownload(propertyId: string): Promise<void> {
-    const sb = await getClient();
-    if (!sb) return;
     try {
-      await sb.from('brochure_downloads').insert([{ property_id: propertyId }]);
+      await query(`INSERT INTO brochure_downloads (property_id) VALUES ($1)`, [propertyId]);
     } catch (err) {
       console.error('Error tracking brochure download:', err);
     }
@@ -460,75 +461,57 @@ export const db = {
   // Stats dashboard compilation
   // --------------------------------------------------
   async getDashboardStats(): Promise<any> {
-    const sb = await getClient();
-    if (!sb) {
-      return {
-        totalProperties: 0, activeProperties: 0, inactiveProperties: 0,
-        totalLeads: 0, totalDownloads: 0, totalWhatsappClicks: 0, totalViews: 0,
-        leadsByMonth: [], whatsappClicksByProject: [], downloadsByProject: [], viewsByProject: [],
-      };
-    }
-
     try {
-      const [
-        { data: props },
-        { data: viewsList },
-        { data: clicksList },
-        { data: downloadsList },
-        { data: leadsList },
-      ] = await Promise.all([
-        sb.from('properties').select('id, name, published'),
-        sb.from('property_views').select('property_id').limit(5000),
-        sb.from('whatsapp_clicks').select('property_id').limit(5000),
-        sb.from('brochure_downloads').select('property_id').limit(5000),
-        sb.from('leads').select('property_id, created_at').limit(5000),
+      const promiseAll = Promise.all([
+        query(`SELECT id, name, published FROM properties ORDER BY name`),
+        query(`SELECT property_id FROM property_views`),
+        query(`SELECT property_id FROM whatsapp_clicks`),
+        query(`SELECT property_id FROM brochure_downloads`),
+        query(`SELECT property_id, created_at FROM leads ORDER BY created_at DESC`),
       ]);
 
-      const allProperties = (props || []) as any[];
+      const [props, views, clicks, downloads, leads] = await promiseAll;
+
+      const allProperties = props.rows;
       const totalProperties = allProperties.length;
       const activeProperties = allProperties.filter((p: any) => p.published).length;
       const inactiveProperties = totalProperties - activeProperties;
-      const totalLeads = (leadsList || []).length;
-      const totalDownloads = (downloadsList || []).length;
-      const totalWhatsappClicks = (clicksList || []).length;
-      const totalViews = (viewsList || []).length;
+      const totalLeads = leads.rows.length;
+      const totalDownloads = downloads.rows.length;
+      const totalWhatsappClicks = clicks.rows.length;
+      const totalViews = views.rows.length;
 
       const getCountByProperty = (items: any[]) => {
-        const counts: any = {};
+        const counts: Record<string, number> = {};
         items.forEach((v: any) => {
           counts[v.property_id] = (counts[v.property_id] || 0) + 1;
         });
         return Object.keys(counts).map(pid => {
           const prop = allProperties.find((p: any) => p.id === pid);
-          return {
-            id: pid,
-            name: prop ? prop.name : 'Proyecto Eliminado',
-            count: counts[pid]
-          };
+          return { id: pid, name: prop ? prop.name : 'Proyecto Eliminado', count: counts[pid] };
         }).sort((a, b) => b.count - a.count);
       };
 
-      const leadsByMonthMap: any = {};
-      (leadsList || []).forEach((l: any) => {
+      const leadsByMonthMap: Record<string, number> = {};
+      leads.rows.forEach((l: any) => {
         const date = new Date(l.created_at);
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         leadsByMonthMap[key] = (leadsByMonthMap[key] || 0) + 1;
       });
       const leadsByMonth = Object.keys(leadsByMonthMap).sort().map(key => ({
-        month: key,
-        count: leadsByMonthMap[key]
+        month: key, count: leadsByMonthMap[key]
       }));
 
       return {
         totalProperties, activeProperties, inactiveProperties,
         totalLeads, totalDownloads, totalWhatsappClicks, totalViews,
         leadsByMonth,
-        whatsappClicksByProject: getCountByProperty(clicksList || []),
-        downloadsByProject: getCountByProperty(downloadsList || []),
-        viewsByProject: getCountByProperty(viewsList || []),
+        whatsappClicksByProject: getCountByProperty(clicks.rows),
+        downloadsByProject: getCountByProperty(downloads.rows),
+        viewsByProject: getCountByProperty(views.rows),
       };
     } catch (err) {
-      console.error('Supabase getDashboardStats error:', err);
+      console.error('Neon getDashboardStats error:', err);
       return {
         totalProperties: 0, activeProperties: 0, inactiveProperties: 0,
         totalLeads: 0, totalDownloads: 0, totalWhatsappClicks: 0, totalViews: 0,
