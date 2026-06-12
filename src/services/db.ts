@@ -25,6 +25,7 @@ async function getClient() {
 
 async function getAdminClient() {
   try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('Missing SERVICE_ROLE_KEY');
     const sb = await createAdminSupabase();
     if (sb) return sb;
   } catch {}
