@@ -2,34 +2,34 @@
 
 import Link from 'next/link';
 import { Home, Building2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Header() {
   const [visible, setVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const lastScrollY = useRef(0);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    setIsMobile(window.innerWidth < 768);
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
 
     const handleScroll = () => {
       const currentY = window.scrollY;
-      if (isMobile && currentY > lastScrollY && currentY > 80) {
+      if (isMobile && currentY > lastScrollY.current && currentY > 80) {
         setVisible(false);
       } else {
         setVisible(true);
       }
-      setLastScrollY(currentY);
+      lastScrollY.current = currentY;
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', checkMobile);
     };
-  }, [lastScrollY, isMobile]);
+  }, [isMobile]);
 
   return (
     <header
