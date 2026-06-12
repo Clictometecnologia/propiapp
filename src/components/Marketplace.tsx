@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback } from 'react';
-import { Search, SlidersHorizontal, RotateCcw, X, Building2 } from 'lucide-react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { Search, SlidersHorizontal, RotateCcw, X, Building2, Filter } from 'lucide-react';
 import { Property } from '@/types';
 import PropertyCard from './PropertyCard';
 
@@ -35,6 +35,32 @@ export default function Marketplace({ initialProperties }: MarketplaceProps) {
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
   const [onlyEntregaInmediata, setOnlyEntregaInmediata] = useState(false);
   const [onlyBonoPie, setOnlyBonoPie] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [filterVisible, setFilterVisible] = useState(true);
+  const filterScrollY = useRef(0);
+  const [isMobileFilter, setIsMobileFilter] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobileFilter(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileFilter) return;
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      if (currentY > filterScrollY.current && currentY > 80) {
+        setFilterVisible(false);
+      } else if (currentY < filterScrollY.current) {
+        setFilterVisible(true);
+      }
+      filterScrollY.current = currentY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobileFilter]);
 
   // Dynamic Options lists compiled from data
   const comunas = useMemo(() => {
@@ -134,7 +160,9 @@ export default function Marketplace({ initialProperties }: MarketplaceProps) {
   return (
     <div className="w-full" id="marketplace">
       {/* Search and Filters Section */}
-      <section className="bg-card border-b border-border py-6 sticky top-16 z-40 shadow-sm transition-all">
+      <section className={`bg-card border-b border-border py-6 sticky top-16 z-40 shadow-sm transition-all duration-300 ${
+          isMobileFilter && !filterVisible ? '-translate-y-full' : 'translate-y-0'
+        }`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4">
             
@@ -160,8 +188,30 @@ export default function Marketplace({ initialProperties }: MarketplaceProps) {
               )}
             </div>
 
-            {/* Filter controls Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
+            {/* Mobile filter toggle */}
+            <div className="flex md:hidden items-center gap-2">
+              <button
+                onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+                className="flex items-center gap-1.5 h-9 px-4 bg-muted border border-border rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                <Filter className="h-3.5 w-3.5" />
+                Filtros
+                {isFiltering && (
+                  <span className="h-2 w-2 rounded-full bg-primary" />
+                )}
+              </button>
+              {isFiltering && (
+                <button
+                  onClick={handleResetFilters}
+                  className="text-xs font-semibold text-secondary hover:text-secondary/80"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+
+            {/* Filter controls Grid - hidden on mobile unless toggled */}
+            <div className={`${mobileFiltersOpen ? 'flex' : 'hidden'} md:grid md:grid-cols-4 lg:grid-cols-7 flex-col gap-3 items-end`}>
               {/* Comuna */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Comuna</label>
