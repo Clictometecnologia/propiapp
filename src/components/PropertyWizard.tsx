@@ -111,37 +111,52 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
 
     setLoading(true);
     setErrorMsg('');
+    const uploaded: { image_url: string; is_primary: boolean; sort_order: number }[] = [];
+    let hasError = false;
 
-    try {
-      const file = files[0];
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const file = files[i];
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
 
-      const result = await uploadToImgbb(base64, file.name);
-
-      if (!result.success || !result.url) {
-        setErrorMsg('Error al subir imagen a imgbb. Verifica tu conexión.');
-        return;
-      }
-
-      const isPrimary = images.length === 0;
-      setImages([
-        ...images,
-        {
-          image_url: result.url,
-          is_primary: isPrimary,
-          sort_order: images.length
+        const result = await uploadToImgbb(base64, file.name);
+        if (!result.success || !result.url) {
+          hasError = true;
+          continue;
         }
-      ]);
-    } catch (err) {
-      console.error('File upload error:', err);
-      setErrorMsg('Error al subir archivo.');
-    } finally {
-      setLoading(false);
+
+        uploaded.push({
+          image_url: result.url,
+          is_primary: false,
+          sort_order: images.length + uploaded.length,
+        });
+      } catch {
+        hasError = true;
+      }
     }
+
+    if (uploaded.length > 0) {
+      const firstIndex = images.length;
+      setImages(prev => {
+        const updated = [...prev, ...uploaded];
+        if (updated.length > 0 && !updated.some(i => i.is_primary)) {
+          updated[0].is_primary = true;
+        }
+        return updated;
+      });
+    }
+
+    if (hasError && uploaded.length === 0) {
+      setErrorMsg('Error al subir imágenes. Verifica tu conexión.');
+    } else if (hasError) {
+      setErrorMsg(`Se subieron ${uploaded.length} de ${files.length} imágenes.`);
+    }
+
+    setLoading(false);
   };
 
   const setPrimaryImage = (index: number) => {
@@ -608,10 +623,11 @@ export default function PropertyWizard({ property }: PropertyWizardProps) {
                 </button>
                 <label className="h-9 px-4 bg-muted border border-border hover:bg-accent rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 cursor-pointer">
                   <Upload className="h-3.5 w-3.5" />
-                  Subir Foto
+                  Subir Fotos
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
                     onChange={(e) => handleFileUpload(e)}
                   />
