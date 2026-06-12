@@ -1,9 +1,11 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { db } from '@/services/db';
 import { Property, PropertyImage, Lead } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { requireAuth } from '@/lib/supabase-server';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // --- Client Tracking Actions ---
 
@@ -37,9 +39,33 @@ export async function trackBrochureDownloadAction(propertyId: string) {
   }
 }
 
+function sanitize(str: string): string {
+  return str.replace(/[<>&"']/g, '').trim().substring(0, 500);
+}
+
 export async function createLeadAction(leadData: Omit<Lead, 'id' | 'created_at'>) {
   try {
-    const newLead = await db.createLead(leadData);
+    const hdrs = await headers();
+    const ip = hdrs.get('x-forwarded-for') || hdrs.get('x-real-ip') || 'unknown';
+    if (!checkRateLimit(`lead:${ip}`, 5, 60000)) {
+      return { success: false, error: 'Demasiadas solicitudes. Intenta en 1 minuto.' };
+    }
+
+    const cleaned: Omit<Lead, 'id' | 'created_at'> = {
+      property_id: leadData.property_id || null,
+      nombre: sanitize(leadData.nombre || ''),
+      email: sanitize(leadData.email || ''),
+      telefono: sanitize(leadData.telefono || ''),
+      mensaje: sanitize(leadData.mensaje || ''),
+      estado: (leadData.estado || 'Pendiente') as Lead['estado'],
+      observacion: '',
+    };
+
+    if (!cleaned.nombre || !cleaned.email || !cleaned.telefono) {
+      return { success: false, error: 'Nombre, email y teléfono son requeridos.' };
+    }
+
+    const newLead = await db.createLead(cleaned);
     revalidatePath('/admin/leads');
     return { success: true, lead: newLead };
   } catch (error) {
