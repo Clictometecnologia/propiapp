@@ -3,7 +3,8 @@ import { signToken, getAdminCredentials } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
+    const body = await request.json();
+    const { email, password } = body;
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });
@@ -11,6 +12,7 @@ export async function POST(request: Request) {
 
     const creds = getAdminCredentials();
     if (!creds) {
+      console.error('ADMIN_EMAIL or ADMIN_PASSWORD not set on server');
       return NextResponse.json({ error: 'Auth no configurado' }, { status: 500 });
     }
 
@@ -33,7 +35,8 @@ export async function POST(request: Request) {
     });
 
     return response;
-  } catch {
+  } catch (err) {
+    console.error('Login error:', err);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }
