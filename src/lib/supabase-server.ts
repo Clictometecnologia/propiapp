@@ -1,34 +1,18 @@
-import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-
-export async function createServerSupabase() {
-  const cookieStore = await cookies()
-
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {}
-        },
-      },
-    }
-  )
-}
+import { verifyToken } from './auth'
 
 export async function requireAuth() {
-  const supabase = await createServerSupabase()
-  const { data: { session }, error } = await supabase.auth.getSession()
-  if (error || !session) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth_token')?.value
+
+  if (!token) {
     throw new Error('No autorizado. Debes iniciar sesión.')
   }
-  return session
+
+  const payload = await verifyToken(token)
+  if (!payload) {
+    throw new Error('No autorizado. Debes iniciar sesión.')
+  }
+
+  return payload
 }
