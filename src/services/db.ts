@@ -235,19 +235,17 @@ export const db = {
     const propId = result.rows[0].id;
 
     if (imagesData && imagesData.length > 0) {
-      const imgValues = imagesData.map((img, i) => {
-        const offset = i * 4;
-        return `($1::uuid, $${offset + 2}::text, $${offset + 3}::boolean, $${offset + 4}::int)`;
-      }).join(', ');
-
+      const parts: string[] = [];
       const imgParams: any[] = [propId];
-      for (const img of imagesData) {
-        imgParams.push(img.image_url || '', !!img.is_primary, img.sort_order ?? 0);
+      for (let i = 0; i < imagesData.length; i++) {
+        const base = i * 3;
+        parts.push(`($1::uuid, $${base + 2}::text, $${base + 3}::boolean, $${base + 4}::int)`);
+        imgParams.push(imagesData[i].image_url || '', !!imagesData[i].is_primary, imagesData[i].sort_order ?? 0);
       }
 
       await query(`
         INSERT INTO property_images (property_id, image_url, is_primary, sort_order)
-        VALUES ${imgValues}
+        VALUES ${parts.join(', ')}
       `, imgParams);
     }
 
@@ -315,19 +313,17 @@ export const db = {
       await query(`DELETE FROM property_images WHERE property_id = $1`, [id]);
 
       if (imagesData.length > 0) {
-        const imgValues = imagesData.map((_, i) => {
-          const offset = i * 4;
-          return `($1::uuid, $${offset + 2}::text, $${offset + 3}::boolean, $${offset + 4}::int)`;
-        }).join(', ');
-
+        const parts: string[] = [];
         const imgParams: any[] = [id];
-        for (const img of imagesData) {
-          imgParams.push(img.image_url || '', !!img.is_primary, img.sort_order ?? 0);
+        for (let i = 0; i < imagesData.length; i++) {
+          const base = i * 3;
+          parts.push(`($1::uuid, $${base + 2}::text, $${base + 3}::boolean, $${base + 4}::int)`);
+          imgParams.push(imagesData[i].image_url || '', !!imagesData[i].is_primary, imagesData[i].sort_order ?? 0);
         }
 
         await query(`
           INSERT INTO property_images (property_id, image_url, is_primary, sort_order)
-          VALUES ${imgValues}
+          VALUES ${parts.join(', ')}
         `, imgParams);
       }
     }
