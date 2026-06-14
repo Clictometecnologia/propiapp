@@ -1,6 +1,10 @@
 import { SignJWT, jwtVerify } from 'jose';
+import bcrypt from 'bcryptjs';
 
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET || 'fallback-dev-secret-change-in-production-32chars');
+if (!process.env.AUTH_SECRET) {
+  throw new Error('AUTH_SECRET environment variable is required');
+}
+const secret = new TextEncoder().encode(process.env.AUTH_SECRET);
 const issuer = 'propiapp';
 const expiresIn = '7d';
 
@@ -30,6 +34,7 @@ export async function verifyToken(token: string): Promise<AuthPayload | null> {
 export interface AdminUser {
   email: string;
   password: string;
+  passwordHash?: string;
 }
 
 export function getAdminUsers(): AdminUser[] {
@@ -46,4 +51,11 @@ export function getAdminUsers(): AdminUser[] {
     console.error('ADMIN_CREDENTIALS is not valid JSON');
     return [];
   }
+}
+
+export async function verifyPassword(plainPassword: string, storedPassword: string): Promise<boolean> {
+  if (storedPassword.startsWith('$2')) {
+    return bcrypt.compare(plainPassword, storedPassword);
+  }
+  return plainPassword === storedPassword;
 }

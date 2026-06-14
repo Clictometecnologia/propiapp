@@ -1,31 +1,56 @@
-// Simple in-memory rate limiter per IP
-// Note: not perfect across Vercel instances, but stops basic abuse
+import { query } from './neon';
 
-const requests = new Map<string, { count: number; resetAt: number }>();
+const memoryCache = new Map<string, { count: number; resetAt: number }>();
 
-export function checkRateLimit(key: string, maxRequests: number = 10, windowMs: number = 60000): boolean {
-  const now = Date.now();
-  const entry = requests.get(key);
+export async function checkRateLimit(key: string, maxRequests: number = 10, windowMs: number = 60000): Promise<boolean> {
+  try {
+    const now = Date.now();
+    const cached = memoryCache.get(key);
 
-  if (!entry || now > entry.resetAt) {
-    requests.set(key, { count: 1, resetAt: now + windowMs });
+    if (cached && now <= cached.resetAt && cached.count >= maxRequests) {
+      return false;
+    }
+
+    const windowSeconds = Math.ceil(windowMs / 1000);
+    const result = await query(`
+      INSERT INTO rate_limits AS r (key, count, reset_at)
+      VALUES ($1, 1, NOW() + make_interval(secs => $3))
+      ON CONFLICT (key) DO UPDATE
+      SET count = CASE
+        WHEN r.reset_at <= NOW() THEN 1
+        ELSE r.count + 1
+      END,
+      reset_at = CASE
+        WHEN r.reset_at <= NOW() THEN EXCLUDED.reset_at
+        ELSE r.reset_at
+      END
+      RETURNING count
+    `, [key, maxRequests, windowSeconds]);
+
+    const currentCount = result.rows[0]?.count ?? 1;
+    const resetAt = now + windowMs;
+
+    memoryCache.set(key, { count: currentCount, resetAt });
+
+    return currentCount <= maxRequests;
+  } catch {
+    const now = Date.now();
+    const cached = memoryCache.get(key);
+    if (!cached || now > cached.resetAt) {
+      memoryCache.set(key, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+    if (cached.count >= maxRequests) return false;
+    cached.count++;
     return true;
   }
-
-  if (entry.count >= maxRequests) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
 }
 
-// Periodic cleanup to prevent memory leak
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of requests) {
+  for (const [key, entry] of memoryCache) {
     if (now > entry.resetAt) {
-      requests.delete(key);
+      memoryCache.delete(key);
     }
   }
 }, 60000);

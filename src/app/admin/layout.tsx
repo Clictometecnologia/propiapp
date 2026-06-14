@@ -9,6 +9,7 @@ import {
   ListOrdered, 
   Users, 
   BarChart3, 
+  Calculator,
   LogOut, 
   Loader2,
   ExternalLink,
@@ -76,6 +77,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Propiedades', href: '/admin/propiedades', icon: ListOrdered },
     { name: 'Leads de Contacto', href: '/admin/leads', icon: Users },
     { name: 'Estadísticas', href: '/admin/estadisticas', icon: BarChart3 },
+    { name: 'Cotizador', href: '/admin/cotizador', icon: Calculator },
   ];
 
   const isLoginPage = pathname === '/admin/login';

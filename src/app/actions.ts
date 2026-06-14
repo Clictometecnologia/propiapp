@@ -47,7 +47,7 @@ export async function createLeadAction(leadData: Omit<Lead, 'id' | 'created_at'>
   try {
     const hdrs = await headers();
     const ip = hdrs.get('x-forwarded-for') || hdrs.get('x-real-ip') || 'unknown';
-    if (!checkRateLimit(`lead:${ip}`, 5, 60000)) {
+    if (!(await checkRateLimit(`lead:${ip}`, 5, 60000))) {
       return { success: false, error: 'Demasiadas solicitudes. Intenta en 1 minuto.' };
     }
 
@@ -212,6 +212,7 @@ const IMGBB_API_KEY = process.env.IMGBB_API_KEY || '';
 
 export async function uploadToImgbb(base64: string, fileName: string) {
   try {
+    await requireAuth();
     const res = await fetch('https://api.imgbb.com/1/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

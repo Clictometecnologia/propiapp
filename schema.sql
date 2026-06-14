@@ -103,7 +103,25 @@ ALTER TABLE public.property_views ENABLE ROW LEVEL SECURITY;
 
 
 -- --------------------------------------------------
--- 7. Policies (RLS Rules)
+-- 7. Table: rate_limits
+-- --------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.rate_limits (
+    key TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 1,
+    reset_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+-- Allow all operations for rate_limits (no public access needed, only server-side)
+ALTER TABLE public.rate_limits ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow server-side access on rate_limits"
+    ON public.rate_limits FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+
+-- --------------------------------------------------
+-- 8. Policies (RLS Rules)
 -- --------------------------------------------------
 
 -- Properties: Anyone can read published properties; authenticated users can do everything.
@@ -174,7 +192,7 @@ CREATE POLICY "Allow full access for authenticated users on property views"
 
 
 -- --------------------------------------------------
--- 8. Indexes for Optimization
+-- 9. Indexes for Optimization
 -- --------------------------------------------------
 CREATE INDEX IF NOT EXISTS properties_published_idx ON public.properties(published);
 CREATE INDEX IF NOT EXISTS properties_slug_idx ON public.properties(slug);
@@ -186,7 +204,7 @@ CREATE INDEX IF NOT EXISTS property_views_property_id_idx ON public.property_vie
 
 
 -- --------------------------------------------------
--- 9. Trigger for updated_at
+-- 10. Trigger for updated_at
 -- --------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
@@ -203,7 +221,7 @@ CREATE OR REPLACE TRIGGER update_properties_updated_at
 
 
 -- --------------------------------------------------
--- 10. Storage Buckets (Execute in SQL if postgres has permissions, or configure in Supabase dashboard)
+-- 11. Storage Buckets (Execute in SQL if postgres has permissions, or configure in Supabase dashboard)
 -- --------------------------------------------------
 -- Note: Supabase standard bucket tables are in `storage.buckets` and `storage.objects`
 -- Ensure you create 'property-images' and 'brochures' buckets and make them public.

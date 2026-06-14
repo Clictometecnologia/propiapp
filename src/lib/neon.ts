@@ -2,7 +2,7 @@ import pg from 'pg';
 
 const pool = new pg.Pool({
   connectionString: process.env.NEON_DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: true },
   max: 10,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 5000,

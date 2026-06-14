@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server';
-import { signToken, getAdminUsers } from '@/lib/auth';
+import { signToken, getAdminUsers, verifyPassword } from '@/lib/auth';
+import { validateOrigin } from '@/lib/csrf';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
   try {
+    if (!(await validateOrigin())) {
+      return NextResponse.json({ error: 'Origen no válido' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { email, password } = body;
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });
+    }
+
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    if (!(await checkRateLimit(`login:${ip}`, 5, 60000))) {
+      return NextResponse.json({ error: 'Demasiados intentos. Intenta en 1 minuto.' }, { status: 429 });
     }
 
     const users = getAdminUsers();
@@ -16,12 +27,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Auth no configurado' }, { status: 500 });
     }
 
-    const user = users.find(u =>
-      u.email.toLowerCase().trim() === email.toLowerCase().trim() &&
-      u.password === password
-    );
+    const user = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
 
-    if (!user) {
+    if (!user || !(await verifyPassword(password, user.password))) {
       return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
     }
 
